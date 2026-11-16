@@ -1,0 +1,78 @@
+name: Actualizar congreso-mexicano
+
+# Padrón, votaciones y decretos de la legislatura en curso. Lo lanza el Worker
+# `scheduler` cada lunes, después de las vigilancias de leyes (los decretos se
+# enlazan con sus commits), o a mano: gh workflow run actualizar-congreso.yml
+on:
+  workflow_dispatch:
+    inputs:
+      legislatura:
+        description: Número de legislatura
+        default: '66'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: actualizar-congreso
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      LEG: ${{ inputs.legislatura || '66' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Clonar los repos de datos
+        env:
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
+        run: |
+          mkdir -p ../repos
+          git clone -q "https://x-access-token:${GH_TOKEN}@github.com/OpenCodice/congreso-mexicano.git" ../repos/congreso-mexicano
+          for r in constitucion-mexicana leyes-federales fiscal-mexicano; do
+            git clone -q --filter=blob:none "https://github.com/OpenCodice/$r.git" "../repos/$r"
+          done
+      - name: Pruebas
+        run: pip install -q pytest && python -m pytest -q
+      - name: Padrón
+        run: |
+          python -m congreso padron --out ../repos/congreso-mexicano --legislatura "$LEG" --camara diputados
+          python -m congreso padron --out ../repos/congreso-mexicano --legislatura "$LEG" --camara senado
+      - name: Votaciones y expedientes
+        # Un expediente que no cuadra se anota y se omite; el resto se publica.
+        run: python -m congreso votaciones --out ../repos/congreso-mexicano --legislatura "$LEG" > ../votaciones.json
+      - name: Decretos
+        run: python -m congreso decretos --out ../repos/congreso-mexicano --repos ../repos > ../decretos.json
+      - name: Validar (GATE)
+        run: python -m congreso validar --out ../repos/congreso-mexicano
+      - name: Abrir PR
+        env:
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
+        run: |
+          cd ../repos/congreso-mexicano
+          git config user.name "opencodice-ci"
+          git config user.email "opencodice-ci@users.noreply.github.com"
+          rama="datos/$(date -u +%Y-%m-%d-%H%M)"
+          git checkout -q -b "$rama"
+          python "$GITHUB_WORKSPACE/scripts/commits.py" .
+          if [ "$(git rev-list --count origin/main..HEAD)" = "0" ]; then
+            echo "Sin cambios."; exit 0
+          fi
+          git push -q origin "$rama"
+          python - <<'PY' > ../../cuerpo.md
+          import json
+          v = json.load(open("../../votaciones.json")); d = json.load(open("../../decretos.json"))
+          print(f"Expedientes: {v['expedientes']} · votaciones: {v['votaciones']} · omitidos: {v['omitidos']}")
+          print(f"Decretos: {d['decretos']} · con expediente: {d['con_expediente']} · ambiguos: {d['ambiguos']} · sin decreto: {d['sin_decreto']}")
+          for e in (v["errores"] + d["avisos"])[:80]:
+              print(f"- {e[:300]}")
+          PY
+          gh label create verificado -R OpenCodice/congreso-mexicano --force >/dev/null
+          gh pr create -R OpenCodice/congreso-mexicano --head "$rama" --base main \
+            --title "Datos del Congreso al $(date -u +%Y-%m-%d)" \
+            --body-file ../../cuerpo.md --label verificado
