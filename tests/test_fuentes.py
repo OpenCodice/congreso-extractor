@@ -135,3 +135,18 @@ def test_nombre_contenido_en_otro():
     assert dof.menciones("Decreto por el que se reforma la Ley General de Salud Mental.", NOMBRES) == {"lgsm"}
     assert dof.menciones("Decreto que reforma la Ley General de Salud y la Ley Federal del Trabajo", NOMBRES) == {"lgs", "lft"}
     assert not dof.es_decreto("Fe de erratas al Decreto por el que se reforma la Ley General de Salud")
+
+
+def test_lista_incompleta_se_declara():
+    # El resumen cuenta 21 senadores del PAN; la lista nominal trae 20.
+    from congreso import votaciones
+    v = sil.votos(html("votos_nominales_sen_4820033.html"))
+    d = sil.detalle_votacion(html("votacion_sen_4820033.html"))
+    assert votaciones.faltantes_en_lista(v, d, "4820033") == [{"grupo": "PAN", "option": "yes", "value": 1}]
+
+
+def test_lista_completa_sin_faltantes():
+    from congreso import votaciones
+    v = sil.votos(html("piloto_votos_nominales_dip_5135887.html"))
+    d = sil.detalle_votacion(html("piloto_votacion_dip_5135887.html"))
+    assert votaciones.faltantes_en_lista(v, d, "5135887") == []

@@ -79,6 +79,43 @@ def atribuir(votos: list[dict], indice: dict, camaras: set[str], contexto: str) 
     return salida
 
 
+OPCIONES = ("yes", "no", "abstain", "absent")
+
+
+def faltantes_en_lista(votos: list[dict], detalle: dict, contexto: str) -> list[dict]:
+    """Lo que el resumen por grupo cuenta y la lista nominal no trae.
+
+    El SIL a veces deja fuera de la lista a un legislador que su propio resumen
+    sí cuenta. Cada voto listado sigue siendo oficial, así que la lista se
+    publica si es un subconjunto del resumen y lo que falta queda declarado. Un
+    voto de más, un grupo que el resumen no conoce o un resumen que no suma no
+    tienen explicación: el asunto se omite.
+    """
+    grupos = [g for g in detalle["grupos"] if g["grupo"] != "Total"]
+    if not grupos:
+        raise Omitido(f"{contexto}: sin resumen por grupo")
+    lista = Counter((v["partido"], v["opcion"]) for v in votos)
+    ajenos = {p for p, _ in lista} - {g["grupo"] for g in grupos}
+    if ajenos:
+        raise Omitido(f"{contexto}: grupos {sorted(ajenos)} en la lista y no en el resumen")
+    general = detalle["general"]
+    for k in ("yes", "no", "abstain"):
+        if sum(g[k] for g in grupos) != general[k]:
+            raise Omitido(f"{contexto}: los grupos no suman {k} = {general[k]}")
+    total = next((g for g in detalle["grupos"] if g["grupo"] == "Total"), None)
+    if total and any(sum(g[k] for g in grupos) != total[k] for k in OPCIONES):
+        raise Omitido(f"{contexto}: los grupos no suman la fila Total")
+    faltan = []
+    for g in grupos:
+        for k in OPCIONES:
+            dif = g[k] - lista[(g["grupo"], k)]
+            if dif < 0:
+                raise Omitido(f"{contexto}: {g['grupo']} {k} = {lista[(g['grupo'], k)]} en la lista, {g[k]} en el resumen")
+            if dif:
+                faltan.append({"grupo": g["grupo"], "option": k, "value": dif})
+    return faltan
+
+
 def eventos_de_asunto(leg: str, fila: dict, indice: dict) -> tuple[list[dict], list[tuple[str, bytes]], list[dict]]:
     """Las votaciones nominales de un dictamen, en memoria, las copias de sus fuentes y sus trámites."""
     camara = _CAMARA.get(fila["camara"] or "")
@@ -138,18 +175,14 @@ def eventos_de_asunto(leg: str, fila: dict, indice: dict) -> tuple[list[dict], l
         if con_votos == i - 1:
             rv = red.obtener(sil.url_votos(asunto, detalle["tramite"]))
             votos = sil.votos(sil.decodificar(rv.contenido))
-            conteo = Counter(v["opcion"] for v in votos)
-            for k in ("yes", "no", "abstain"):
-                if conteo[k] != general[k]:
-                    raise Omitido(f"asunto {asunto}: {k} = {conteo[k]} en la lista, {general[k]} en el resumen")
-            total = next((g for g in detalle["grupos"] if g["grupo"] == "Total"), None)
-            if total and (len(votos), conteo["absent"]) != (total["total"], total["absent"]):
-                raise Omitido(f"asunto {asunto}: {len(votos)} votos y {conteo['absent']} ausentes; "
-                              f"el resumen dice {total['total']} y {total['absent']}")
+            faltan = faltantes_en_lista(votos, detalle, f"asunto {asunto}")
             evento["votes"] = atribuir(votos, indice, camaras, f"asunto {asunto}")
             evento["votos_publicados"] = True
             evento["tramite"] = detalle["tramite"]
-            evento["counts"].append({"option": "absent", "value": conteo["absent"]})
+            ausentes = sum(g["absent"] for g in detalle["grupos"] if g["grupo"] != "Total")
+            evento["counts"].append({"option": "absent", "value": ausentes})
+            if faltan:
+                evento["votos_faltantes"] = faltan
             evento["group_results"] = [g for g in detalle["grupos"] if g["grupo"] != "Total"]
             for r in (rd, rv):
                 p, c = _procedencia(r)
@@ -196,7 +229,9 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     if not filas:
         raise RuntimeError("el buscador de votaciones no devolvió filas")
     if solo:
-        filas = [f for f in filas if f["clave"] in solo]
+        # Un expediente se escribe completo: se toman todos sus dictámenes.
+        seguimientos = {f["seguimiento"] for f in filas if f["clave"] in solo}
+        filas = [f for f in filas if f["seguimiento"] in seguimientos]
     indice = indice_mandatos(raiz, leg)
 
     por_seguimiento: dict[str, list[dict]] = {}

@@ -60,10 +60,18 @@ def validar(raiz: Path) -> list[str]:
             continue
         if not v["votes"]:
             errores.append(f"{d}: votos_publicados sin votos")
+        # Los votos listados más los que el SIL cuenta y no lista dan los conteos.
+        faltan = v.get("votos_faltantes", [])
+        if any(f["value"] <= 0 for f in faltan):
+            errores.append(f"{d}: votos_faltantes con valores no positivos")
         conteo = Counter(x["option"] for x in v["votes"])
-        if dict(conteo) != {c["option"]: c["value"] for c in v["counts"] if c["value"] or c["option"] in conteo}:
+        for f in faltan:
+            conteo[f["option"]] += f["value"]
+        if +conteo != +Counter({c["option"]: c["value"] for c in v["counts"]}):
             errores.append(f"{d}: los votos {dict(conteo)} no suman los conteos {v['counts']}")
         por_grupo = Counter(x["grupo_fuente"] for x in v["votes"])
+        for f in faltan:
+            por_grupo[f["grupo"]] += f["value"]
         for g in v.get("group_results", []):
             if por_grupo[g["grupo"]] != g["total"]:
                 errores.append(f"{d}: grupo {g['grupo']} con {por_grupo[g['grupo']]} votos, el resumen dice {g['total']}")
