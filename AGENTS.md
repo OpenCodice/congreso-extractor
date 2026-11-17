@@ -25,6 +25,9 @@ fuera de la biblioteca estándar de Python 3.12.
   `Referencia`; un registro solo se reescribe si cambió lo que dice la fuente.
 - `padron.py`, `votaciones.py`, `decretos.py` — arman los registros Popolo y
   sus extensiones; `validar.py`, los invariantes del repo de datos.
+- `lecturas.py` — páginas que el parser no leyó: el fallo, la lectura del
+  agente y su verificación determinista; `scripts/regresion.py` compara dos
+  versiones de los parsers sobre las páginas en caché.
 - `residuos.py` — los decretos que `decretos` no liga a su expediente, para el
   agente: pendientes, verificación de sus citas y aplicación del registro
   `resoluciones/decretos/` (un lote por corrida; no se edita a mano).
@@ -72,6 +75,40 @@ registra en `resoluciones/` (un decreto ya juzgado con los mismos candidatos no
 vuelve al agente) y los decretos se regeneran con él en un PR. El agente corre
 sin credenciales en disco: el checkout no las guarda y los repos se clonan sin
 token.
+
+Dentro de la actualización, una página del Senado o la Gaceta que el parser
+no lee (un formato nuevo) se guarda como fallo (`congreso/lecturas.py`) y la
+lee un agente (`scripts/agente/leer.sh`, `brief-leer.md`, sin más secreto que
+el suyo). Su lectura, con la forma exacta que daría el parser, solo se acepta
+si pasa `lecturas verificar`: cada nombre y cada cifra están en la página, las
+listas suman los totales que declara la fuente (o la otra página de la misma
+votación, leída por el parser) y las etiquetas son las del catálogo. Lo
+aceptado queda en `lecturas/{fuente}/{tipo}/{sha256}.json` (no se edita a
+mano), sirve solo para esa página exacta y la votación lo dice en `lecturas`.
+Hay dos rondas (en la Gaceta, la lista se pide con lo que dice la tabla).
+Cuando el parser ya lee una página con lectura, manda el parser y, si los dos
+difieren, se avisa en el PR.
+
+Al terminar cada actualización, `reparar-parsers.yml` toma su artefacto
+`fallos` (las páginas del Senado y la Gaceta que el parser no leyó; ver
+`congreso/lecturas.py`) y, si hay, un agente (`scripts/agente/reparar.sh`,
+`brief-reparar.md`) corrige `senado.py`/`gaceta.py` (o, para un bloqueo nuevo,
+`red.BLOQUEOS`) con un fixture real y su prueba; si la página es un bloqueo o
+un error de la fuente, no la "arregla": lo reporta. Su cambio sale como parche
+y otro job, sobre un checkout limpio con el caché y los fallos descargados de
+nuevo, corre las compuertas (`scripts/agente/compuertas_reparar.py`): solo
+toca los parsers y `tests/`, sin borrar ni modificar fixtures, y cada fixture
+nuevo es byte por byte una página descargada; pruebas nuevas en verde, y las
+de antes, tal como estaban, contra el código nuevo; `scripts/regresion.py` sin
+regresiones; cada fallo que dice resolver ahora se lee, y ninguna página que
+el cambio lee distinto contradice su lectura verificada. Un tercer job, sin
+correr código del agente, aplica ese mismo parche (por sha256), lo publica en
+main y relanza la actualización (una vez cada 12 h a lo más).
+
+`scripts/regresion.py` sirve también a mano, antes de tocar un parser: lee
+cada página del caché (y de una carpeta de fallos) con el código de una
+revisión y con el árbol de trabajo, y sale con 1 si algo que se leía cambia:
+`python scripts/regresion.py --cache .cache --antes HEAD [--fallos DIR]`.
 
 ## Red
 

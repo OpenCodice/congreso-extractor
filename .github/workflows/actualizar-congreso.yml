@@ -24,8 +24,14 @@ jobs:
     timeout-minutes: 355
     env:
       LEG: ${{ inputs.legislatura || '66' }}
+      # Páginas que el parser no pudo leer: las lee el agente y, después,
+      # reparar-parsers.yml corrige el parser (ver congreso/lecturas.py).
+      CONGRESO_FALLOS: /tmp/fallos
     steps:
+      # Sin credenciales en disco: el agente lector tiene Bash y no debe poder leerlas.
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -38,11 +44,9 @@ jobs:
           key: descargas-${{ github.run_id }}
           restore-keys: descargas-
       - name: Clonar los repos de datos
-        env:
-          GH_TOKEN: ${{ secrets.PR_TOKEN }}
         run: |
           mkdir -p ../repos
-          git clone -q "https://x-access-token:${GH_TOKEN}@github.com/OpenCodice/congreso-mexicano.git" ../repos/congreso-mexicano
+          git clone -q https://github.com/OpenCodice/congreso-mexicano.git ../repos/congreso-mexicano
       - name: Pruebas
         run: pip install -q pytest && python -m pytest -q
       - name: Padrón
@@ -61,6 +65,36 @@ jobs:
         env:
           EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
         run: python -m congreso gaceta --out ../repos/congreso-mexicano --legislatura "$LEG" > ../gaceta.json
+      # Lo que el parser no leyó lo lee el agente; su lectura solo se usa si pasa
+      # la verificación determinista. Dos rondas: en la Gaceta, la lista se pide
+      # con lo que dice la tabla, así que puede fallar después de leerse la tabla.
+      - name: Agente — leer las páginas que el parser no entendió (1)
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bash scripts/agente/leer.sh
+      - name: Verificar las lecturas (1)
+        run: python -m congreso lecturas verificar --fallos "$CONGRESO_FALLOS" | tee ../lecturas-1.json
+      - name: Senado y Gaceta con las lecturas verificadas
+        env:
+          EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
+        run: |
+          # Solo si el agente aportó lecturas nuevas: lo demás ya está en el caché.
+          [ -n "$(git status --porcelain -- lecturas)" ] || exit 0
+          python -m congreso senado --out ../repos/congreso-mexicano --legislatura "$LEG" > ../senado.json
+          python -m congreso gaceta --out ../repos/congreso-mexicano --legislatura "$LEG" > ../gaceta.json
+      - name: Agente — leer las páginas que el parser no entendió (2)
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bash scripts/agente/leer.sh
+      - name: Verificar las lecturas (2)
+        run: python -m congreso lecturas verificar --fallos "$CONGRESO_FALLOS" | tee ../lecturas-2.json
+      - name: Senado y Gaceta con las lecturas verificadas (2)
+        env:
+          EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
+        run: |
+          [ -n "$(git status --porcelain -- lecturas)" ] || exit 0
+          python -m congreso senado --out ../repos/congreso-mexicano --legislatura "$LEG" > ../senado.json
+          python -m congreso gaceta --out ../repos/congreso-mexicano --legislatura "$LEG" > ../gaceta.json
       - name: Iniciativas, proposiciones y dictámenes negativos
         run: python -m congreso asuntos --out ../repos/congreso-mexicano --legislatura "$LEG" > ../asuntos.json
       - name: Decretos
@@ -78,11 +112,35 @@ jobs:
         with:
           path: .cache
           key: descargas-${{ github.run_id }}
+      # Para reparar-parsers.yml: cada página que el parser no leyó, leída o no por el agente.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fallos
+          path: /tmp/fallos
+          if-no-files-found: ignore
+      - name: Publicar las lecturas en el extractor
+        env:
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
+        run: |
+          [ -n "$(git status --porcelain -- lecturas)" ] || exit 0
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config user.name "opencodice-ci"
+          git config user.email "opencodice-ci@users.noreply.github.com"
+          git add lecturas
+          git commit -q -m "Lecturas verificadas de páginas que el parser no leyó ($(date -u +%Y-%m-%d))"
+          for i in 1 2 3; do
+            git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0
+            git rebase --abort 2>/dev/null || true; sleep $((i * 5))
+          done
+          echo "::error::No se pudieron publicar las lecturas"; exit 1
       - name: Abrir PR
         env:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
         run: |
           cd ../repos/congreso-mexicano
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/OpenCodice/congreso-mexicano.git"
+          git fetch -q origin
           git config user.name "opencodice-ci"
           git config user.email "opencodice-ci@users.noreply.github.com"
           rama="datos/$(date -u +%Y-%m-%d-%H%M)"
@@ -99,6 +157,13 @@ jobs:
           print(f"Expedientes: {v['expedientes']} · votaciones: {v['votaciones']} · omitidos: {v['omitidos']}")
           print(f"Gaceta (Diputados): {g['votaciones']} votaciones · ligadas a un expediente: {g['ligadas']} · con par en el SIL: {g['con_par_sil']} · omitidas: {g['omitidas']}")
           print(f"Senado: {s['votaciones']} votaciones · ligadas a un expediente: {s['ligadas']} · con par en el SIL: {s['con_par_sil']} · omitidas: {s['omitidas']}")
+          import os
+          for n in (1, 2):
+              if os.path.exists(f"../../lecturas-{n}.json"):
+                  l = json.load(open(f"../../lecturas-{n}.json"))
+                  print(f"Lecturas del agente (ronda {n}): aceptadas {len(l['aceptadas'])} · rechazadas {len(l['rechazadas'])} · sin propuesta {l['sin_propuesta']}")
+                  for x in l["rechazadas"][:10]:
+                      print(f"- {x[:300]}")
           a = json.load(open("../../asuntos.json"))
           for k, x in a.items():
               print(f"{k}: {x['asuntos']} · cambiados: {x['escritos']} · retirados de la fuente: {x['retirados_de_la_fuente']} · autores sin mandato: {x['autores_sin_mandato']}")

@@ -7,6 +7,7 @@
     python -m congreso asuntos    --out ../congreso-mexicano --legislatura 66 [--tipo 11]
     python -m congreso decretos   --out ../congreso-mexicano --repos ..
     python -m congreso validar    --out ../congreso-mexicano
+    python -m congreso lecturas verificar --fallos /tmp/fallos
     python -m congreso residuos   {pendientes,para-juicio,verificar} --out ../congreso-mexicano --trabajo /tmp/r [--repos ..]
 """
 from __future__ import annotations
@@ -57,6 +58,10 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--trabajo", type=Path, required=True)
     a.add_argument("--repos", type=Path, help="carpeta con los repos de leyes (para `pendientes`)")
 
+    a = sub.add_parser("lecturas", help="verifica las lecturas del agente de páginas que el parser no leyó")
+    a.add_argument("etapa", choices=["verificar"])
+    a.add_argument("--fallos", type=Path, required=True)
+
     a = sub.add_parser("validar")
     a.add_argument("--out", type=Path, required=True)
 
@@ -87,6 +92,9 @@ def main(argv: list[str] | None = None) -> int:
             r = residuos.para_juicio(args.out, args.trabajo)
         else:
             r = residuos.verificar(args.out, args.trabajo)
+    elif args.orden == "lecturas":
+        from . import lecturas
+        r = lecturas.verificar_fallos(args.fallos)
     else:
         from . import validar
         errores = validar.validar(args.out)

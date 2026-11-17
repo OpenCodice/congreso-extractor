@@ -9,11 +9,14 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from . import cotejo, datos, nombres, red, senado, validar
+from . import cotejo, datos, lecturas, nombres, red, senado, validar
 from .cotejo import Omitida
 from .texto import romano
 
 
+# Una votación publicada no cambia: se descarga una vez al año a lo más (el
+# Senado bloquea si se le pide rápido, así que volver a bajarlas cuesta horas).
+VIGENCIA = 24 * 365
 # Esperas ante el firewall del Senado antes de dejar el resto para otra corrida.
 ESPERAS = (120, 600)
 
@@ -46,9 +49,33 @@ def evento(leg: str, v: dict, filas: list[dict], idx: nombres.Indice, fuentes: l
         "sources": fuentes,
         **({"votos_faltantes": cotejo.faltantes(sin_mandato)} if sin_mandato else {}),
         **({"inconsistencias": list(dict.fromkeys(inconsistencias + otras))} if inconsistencias + otras else {}),
+        **({"lecturas": v["lecturas"]} if v.get("lecturas") else {}),
     }
     validar.declarar_diferencias(e)
     return e
+
+
+def leer_votacion(clave: str, rv: red.Respuesta, rt: red.Respuesta) -> tuple[dict, list[dict]]:
+    """Página de la votación y tabla nominal, por el parser o por una lectura
+    verificada. Cada página que falle sin lectura se guarda como fallo, con lo
+    que la otra página ya dice para que el agente y la verificación lo usen."""
+    tabla = lecturas.intentar("senado", "tabla", rt)
+    conteo_tabla = ({k: sum(1 for f in tabla if f["opcion"] == k) for k in ("yes", "no", "abstain")}
+                    if tabla else None)
+    usadas, pendiente = [], None
+    try:
+        v, lv = lecturas.leer("senado", "votacion", clave, rv, {"conteo_tabla": conteo_tabla} if tabla else {})
+        usadas += [lv] if lv else []
+    except lecturas.SinLectura as e:
+        v, pendiente = None, e
+    try:
+        filas, lt = lecturas.leer("senado", "tabla", clave, rt, {"conteos": v["conteos"]} if v else {})
+        usadas += [lt] if lt else []
+    except lecturas.SinLectura as e:
+        pendiente = pendiente or e
+    if pendiente:
+        raise pendiente
+    return (dict(v, lecturas=usadas) if usadas else v), filas
 
 
 def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dict:
@@ -65,11 +92,10 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     leidas, errores = [], []
     for i, x in enumerate(listado):
         try:
-            # Una votación publicada no cambia: se descarga una vez al mes a lo más.
-            rv = red.obtener(senado.url_votacion(x["clave"], legislatura), vigencia_horas=24 * 30, bloqueos=ESPERAS)
-            v = dict(senado.votacion(senado.decodificar(rv.contenido)), clave=x["clave"], orden=int(x["clave"]))
-            rt = red.obtener(senado.url_tabla(x["clave"], legislatura), vigencia_horas=24 * 30, bloqueos=ESPERAS)
-            leidas.append((v, senado.tabla(senado.decodificar(rt.contenido)), [rv, rt]))
+            rv = red.obtener(senado.url_votacion(x["clave"], legislatura), vigencia_horas=VIGENCIA, bloqueos=ESPERAS)
+            rt = red.obtener(senado.url_tabla(x["clave"], legislatura), vigencia_horas=VIGENCIA, bloqueos=ESPERAS)
+            v, filas = leer_votacion(x["clave"], rv, rt)
+            leidas.append((dict(v, clave=x["clave"], orden=int(x["clave"])), filas, [rv, rt]))
         except red.Bloqueado:
             # El firewall del sitio no cede: lo que falta queda para la siguiente
             # corrida (lo ya descargado está en el caché) y no se marca retirado.
@@ -79,6 +105,8 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
         except (ValueError, RuntimeError, KeyError) as e:
             errores.append(f"senado {x['clave']}: {e}")
 
+    errores += lecturas.AVISOS
+    lecturas.AVISOS.clear()
     enlaces = cotejo.emparejar([v for v, _, _ in leidas], eventos_sil, "la votación del Senado")
     return escribir(raiz, leg, "senado", leidas, enlaces, eventos_sil, evento, errores,
                     {"listado": rl.procedencia()}, "senado-", vigentes)

@@ -1,0 +1,186 @@
+name: Reparar parsers con el agente
+
+# Las páginas del Senado y la Gaceta que el parser no leyó en la última
+# actualización (artefacto `fallos`, ver congreso/lecturas.py) van a un agente
+# que corrige congreso/senado.py, congreso/gaceta.py (o, para un bloqueo nuevo,
+# congreso/red.py) con un fixture real y su prueba. Su cambio sale como parche
+# y se prueba en otro job, sobre un checkout limpio que el agente no tocó, con
+# compuertas deterministas (scripts/agente/compuertas_reparar.py): rutas
+# permitidas, fixtures reales, pruebas nuevas y anteriores, sin regresiones
+# sobre el caché de descargas (scripts/regresion.py) y de acuerdo con las
+# lecturas verificadas. Solo entonces se publica en main y se relanza la
+# actualización, para que el parser reemplace a las lecturas del agente.
+# A mano: gh workflow run reparar-parsers.yml [-f run_id=…]
+on:
+  workflow_run:
+    workflows: [Actualizar congreso-mexicano]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Corrida de actualizar-congreso.yml con los fallos (por omisión, la última terminada)
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reparar-parsers
+  cancel-in-progress: false
+
+env:
+  TRABAJO: /tmp/reparar
+  FALLOS: /tmp/fallos
+
+jobs:
+  agente:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run_id: ${{ steps.fallos.outputs.run_id }}
+      hay_fallos: ${{ steps.fallos.outputs.hay }}
+      arreglo: ${{ steps.parche.outputs.arreglo }}
+    steps:
+      # Sin credenciales en disco: el agente tiene Bash y no debe poder leerlas.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Descargar los fallos
+        id: fallos
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          run="$RUN_ID"
+          if [ -z "$run" ]; then
+            run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow actualizar-congreso.yml --status completed -L 1 \
+                    --json databaseId -q '.[0].databaseId')
+          fi
+          echo "run_id=$run" >> "$GITHUB_OUTPUT"
+          mkdir -p "$FALLOS"
+          gh run download "$run" -R "$GITHUB_REPOSITORY" -n fallos -D "$FALLOS" 2>/dev/null || true
+          if ls "$FALLOS"/*/fallo.json > /dev/null 2>&1; then
+            echo "hay=true" >> "$GITHUB_OUTPUT"
+            echo "Fallos de la corrida $run: $(ls -d "$FALLOS"/*/ | wc -l)"
+          else
+            echo "hay=false" >> "$GITHUB_OUTPUT"
+            echo "La corrida $run no dejó fallos: nada que reparar."
+          fi
+      - uses: actions/cache/restore@v4
+        if: steps.fallos.outputs.hay == 'true'
+        with:
+          path: .cache
+          key: descargas-${{ github.run_id }}
+          restore-keys: descargas-
+      - name: Agente
+        if: steps.fallos.outputs.hay == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: pip install -q pytest && bash scripts/agente/reparar.sh
+      - name: Parche
+        id: parche
+        if: steps.fallos.outputs.hay == 'true'
+        run: |
+          if [ -s "$TRABAJO/arreglo.patch" ]; then echo "arreglo=true"; else echo "arreglo=false"; fi >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.fallos.outputs.hay == 'true'
+        with:
+          name: agente
+          path: /tmp/reparar
+          if-no-files-found: ignore
+
+  compuertas:
+    needs: agente
+    if: needs.agente.outputs.arreglo == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      publicable: ${{ steps.compuertas.outputs.publicable }}
+    steps:
+      # Otro runner: el caché, los fallos y el código salen de nuevo de su
+      # fuente; del agente solo llegan el parche y lo que dice haber resuelto.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache
+          key: descargas-${{ github.run_id }}
+          restore-keys: descargas-
+      - name: Descargar los fallos
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ needs.agente.outputs.run_id }}
+        run: |
+          mkdir -p "$FALLOS"
+          gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -n fallos -D "$FALLOS"
+      - uses: actions/download-artifact@v4
+        with:
+          name: agente
+          path: /tmp/agente
+      - name: Compuertas
+        id: compuertas
+        run: |
+          mkdir -p "$TRABAJO"
+          cp /tmp/agente/arreglo.patch "$TRABAJO/"
+          cp /tmp/agente/reparacion.json "$TRABAJO/" 2>/dev/null || true
+          pip install -q pytest
+          python scripts/agente/compuertas_reparar.py compuertas --trabajo "$TRABAJO" --fallos "$FALLOS" --cache .cache
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compuertas
+          path: /tmp/reparar
+          if-no-files-found: ignore
+
+  publicar:
+    needs: [agente, compuertas]
+    if: needs.compuertas.outputs.publicable == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      # Este job no ejecuta código del agente: aplica el parche ya probado.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: compuertas
+          path: /tmp/reparar
+      # El parche sale del artefacto del agente, subido antes de que corriera
+      # código suyo en las compuertas; tiene que ser el que las pasó (sha256).
+      - uses: actions/download-artifact@v4
+        with:
+          name: agente
+          path: /tmp/agente
+      - name: Publicar el arreglo en el extractor
+        id: publicar
+        env:
+          EXTRACTOR_TOKEN: ${{ secrets.PR_TOKEN }}
+          EXTRACTOR_SLUG: ${{ github.repository }}
+        run: python3 scripts/agente/compuertas_reparar.py publicar --trabajo "$TRABAJO" --parche /tmp/agente/arreglo.patch
+      - name: Relanzar la actualización
+        # Con el parser corregido, la siguiente corrida lee esas páginas por
+        # código y su resultado reemplaza a las lecturas del agente. Una sola
+        # vez cada 12 h, para no encadenar corridas.
+        if: steps.publicar.outputs.relanzar == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run actualizar-congreso.yml -R "$GITHUB_REPOSITORY" --ref main

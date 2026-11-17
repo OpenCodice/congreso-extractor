@@ -9,9 +9,9 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from . import cotejo, datos, gaceta, red, validar
+from . import cotejo, datos, gaceta, lecturas, red, validar
 from .texto import romano
-from .votaciones_senado import escribir
+from .votaciones_senado import VIGENCIA, escribir
 
 
 def evento(leg: str, v: dict, filas: list[dict], idx, fuentes: list[dict]) -> dict:
@@ -45,6 +45,7 @@ def evento(leg: str, v: dict, filas: list[dict], idx, fuentes: list[dict]) -> di
         "sources": fuentes,
         **({"votos_faltantes": cotejo.faltantes(sin_mandato)} if sin_mandato else {}),
         **({"inconsistencias": list(dict.fromkeys(inconsistencias + otras))} if inconsistencias + otras else {}),
+        **({"lecturas": v["lecturas"]} if v.get("lecturas") else {}),
     }
     validar.declarar_diferencias(e)
     return e
@@ -76,12 +77,14 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     for orden, x in enumerate(votaciones):
         clave = x["tabla"].removeprefix("tabla")
         try:
-            # Una votación publicada no cambia: se descarga una vez al mes a lo más.
-            rt = red.obtener(x["url"], vigencia_horas=24 * 30)
-            t = gaceta.tabla(gaceta.decodificar(rt.contenido))
+            rt = red.obtener(x["url"], vigencia_horas=VIGENCIA)
+            t, lt = lecturas.leer("gaceta", "tabla", clave, rt, {})
             cuerpo = gaceta.datos_lista(t["evento"])
-            rl = red.obtener(gaceta.BASE + t["accion"], cuerpo, vigencia_horas=24 * 30)
-            filas = gaceta.lista(gaceta.decodificar(rl.contenido))
+            rl = red.obtener(gaceta.BASE + t["accion"], cuerpo, vigencia_horas=VIGENCIA)
+            filas, ll = lecturas.leer("gaceta", "lista", clave, rl, {"conteos": t["conteos"]})
+            usadas = [l for l in (lt, ll) if l]
+            if usadas:
+                t = dict(t, lecturas=usadas)
         except (ValueError, RuntimeError, KeyError) as e:
             errores.append(f"gaceta {clave}: {e}")
             continue
@@ -89,6 +92,8 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
                  asunto=x["asunto"], fecha=t["fecha"] or x["fecha_sesion"])
         leidas.append((v, filas, [rt, rl]))
 
+    errores += lecturas.AVISOS
+    lecturas.AVISOS.clear()
     enlaces = cotejo.emparejar([v for v, _, _ in leidas], eventos_sil, "la votación de la Gaceta")
     return escribir(raiz, leg, "diputados", leidas, enlaces, eventos_sil, evento, errores,
                     {"indice": ri.procedencia()}, "gaceta-", vigentes)
