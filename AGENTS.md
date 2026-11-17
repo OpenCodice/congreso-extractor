@@ -1,7 +1,8 @@
 # congreso-extractor — guía para agentes
 
 Código que genera [`congreso-mexicano`](https://github.com/OpenCodice/congreso-mexicano)
-desde el SIL de Gobernación y el DOF. Paquete `congreso/`, sin dependencias
+desde el SIL de Gobernación, el DOF, el sitio de votaciones del Senado y la
+Gaceta Parlamentaria de Diputados. Paquete `congreso/`, sin dependencias
 fuera de la biblioteca estándar de Python 3.12.
 
 ## Mapa
@@ -12,6 +13,12 @@ fuera de la biblioteca estándar de Python 3.12.
   detalle y lista nominal, trámites, seguimiento e historial de un expediente.
 - `dof.py` — API de SIDOF: sumario del día y resolución (documento, fecha) →
   decretos que lo nombran.
+- `senado.py`, `gaceta.py` — parsers de las votaciones nominales de cada
+  cámara (todas, también las de lo particular, que el SIL no desglosa).
+- `votaciones_senado.py`, `votaciones_gaceta.py` — sus VoteEvents
+  (`senado-…`, `gaceta-…`); `cotejo.py`, cómo se ligan a la votación del SIL
+  y qué se anota cuando difieren; `nombres.py`, cómo se liga el nombre de
+  cada fuente a un mandato.
 - `padron.py`, `votaciones.py`, `decretos.py` — arman los registros Popolo y
   sus extensiones; `validar.py`, los invariantes del repo de datos.
 - `red.py` — descargas con pausa, reintentos y caché en `.cache/` (no se
@@ -24,13 +31,15 @@ fuera de la biblioteca estándar de Python 3.12.
 python3 -m congreso padron     --out ../congreso-mexicano --legislatura 66 --camara diputados
 python3 -m congreso padron     --out ../congreso-mexicano --legislatura 66 --camara senado
 python3 -m congreso votaciones --out ../congreso-mexicano --legislatura 66 [--asunto 5135887]
+EGRESS_MX_TOKEN=… python3 -m congreso senado --out ../congreso-mexicano --legislatura 66
+EGRESS_MX_TOKEN=… python3 -m congreso gaceta --out ../congreso-mexicano --legislatura 66
 python3 -m congreso decretos   --out ../congreso-mexicano --repos ..
 python3 -m congreso validar    --out ../congreso-mexicano
 python3 -m pytest -q
 ```
 
-El orden importa: las votaciones necesitan el padrón y los decretos, los
-expedientes. `decretos` lee los trailers de los repos de leyes clonados en
+El orden importa: las votaciones necesitan el padrón; las del Senado y la
+Gaceta, las del SIL (para ligarse); los decretos, los expedientes. `decretos` lee los trailers de los repos de leyes clonados en
 `--repos`.
 
 ## Actualización
@@ -39,16 +48,21 @@ expedientes. `decretos` lee los trailers de los repos de leyes clonados en
 abre en `congreso-mexicano` un PR `verificado` con un commit por tipo de dato
 (`scripts/commits.py`: padrón, votaciones, decretos; trailer `Tipo`). Su
 `revisar-pr` corre `validar` y lo fusiona con rebase. Un expediente que no
-cuadra se omite y se anota en el PR; el resto se publica. Falta sumarlo al
-Worker `scheduler` de `constitucion-extractor`, después de las vigilancias de
-leyes de cada lunes.
+cuadra se omite y se anota en el PR; el resto se publica. Lo lanza el Worker
+`scheduler` de `constitucion-extractor` cada lunes a las 18:00 UTC, después de
+las vigilancias de leyes.
 
 ## Red
 
 El SIL clásico (sil.gobernacion.gob.mx) y SIDOF responden desde cualquier
-país. `nsil.gobernacion.gob.mx`, `diputados.gob.mx` (SITL, Gaceta) y
-`senado.gob.mx` no responden desde fuera de México; para usarlos habría que
-pasar por el Worker `egress-mx` de `constitucion-extractor`.
+país; el SIL limita a ~100 peticiones seguidas (`red.BLOQUEO`). El sitio del
+Senado y la Gaceta solo responden desde México: `red.VIA_MX` los pide por el
+Worker `egress-mx` de `constitucion-extractor` (GET y POST de formulario), con
+el secret `EGRESS_MX_TOKEN`, que solo existe en GitHub; en local esos dos
+pasos no corren. Para explorar páginas nuevas de esas fuentes:
+`gh workflow run sondear-mx.yml -f urls="…" [-f datos="…"]` deja lo
+descargado como artefacto. El SITL (sitl.diputados.gob.mx) responde 403 aun
+desde México.
 
 ## Reglas
 

@@ -51,6 +51,10 @@ jobs:
         env:
           EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
         run: python -m congreso senado --out ../repos/congreso-mexicano --legislatura "$LEG" > ../senado.json
+      - name: Votaciones de Diputados (Gaceta)
+        env:
+          EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
+        run: python -m congreso gaceta --out ../repos/congreso-mexicano --legislatura "$LEG" > ../gaceta.json
       - name: Decretos
         run: python -m congreso decretos --out ../repos/congreso-mexicano --repos ../repos > ../decretos.json
       - name: Validar (GATE)
@@ -72,11 +76,12 @@ jobs:
           python - <<'PY' > ../../cuerpo.md
           import json
           v = json.load(open("../../votaciones.json")); d = json.load(open("../../decretos.json"))
-          s = json.load(open("../../senado.json"))
+          s = json.load(open("../../senado.json")); g = json.load(open("../../gaceta.json"))
           print(f"Expedientes: {v['expedientes']} · votaciones: {v['votaciones']} · omitidos: {v['omitidos']}")
+          print(f"Gaceta (Diputados): {g['votaciones']} votaciones · ligadas a un expediente: {g['ligadas']} · con par en el SIL: {g['con_par_sil']} · omitidas: {g['omitidas']}")
           print(f"Senado: {s['votaciones']} votaciones · ligadas a un expediente: {s['ligadas']} · con par en el SIL: {s['con_par_sil']} · omitidas: {s['omitidas']}")
           print(f"Decretos: {d['decretos']} · con expediente: {d['con_expediente']} · ambiguos: {d['ambiguos']} · sin decreto: {d['sin_decreto']}")
-          for e in (v["errores"] + s["errores"] + d["avisos"])[:80]:
+          for e in (v["errores"] + s["errores"] + g["errores"] + d["avisos"])[:80]:
               print(f"- {e[:300]}")
           PY
           gh label create verificado -R OpenCodice/congreso-mexicano --force >/dev/null

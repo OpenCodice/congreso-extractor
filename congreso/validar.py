@@ -14,7 +14,8 @@ from pathlib import Path
 
 from . import datos
 
-OPCIONES = {"yes", "no", "abstain", "absent"}
+# "not voting": la Gaceta lo registra como quórum (pasó lista y no votó).
+OPCIONES = {"yes", "no", "abstain", "absent", "not voting"}
 
 
 def validar(raiz: Path) -> list[str]:
@@ -78,8 +79,9 @@ def validar(raiz: Path) -> list[str]:
         for f in faltan:
             por_grupo[f["grupo"]] += f["value"]
         for g in v.get("group_results", []):
-            if por_grupo[g["grupo"]] != g["total"]:
-                errores.append(f"{d}: grupo {g['grupo']} con {por_grupo[g['grupo']]} votos, el resumen dice {g['total']}")
+            total = g["total"] if "total" in g else sum(g.get(o, 0) for o in OPCIONES)
+            if por_grupo[g["grupo"]] != total:
+                errores.append(f"{d}: grupo {g['grupo']} con {por_grupo[g['grupo']]} votos, el resumen dice {total}")
         for x in v["votes"]:
             if x["option"] not in OPCIONES:
                 errores.append(f"{d}: opción {x['option']!r}")

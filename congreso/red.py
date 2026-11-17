@@ -43,9 +43,13 @@ class Respuesta:
     contenido: bytes
     consultado: str
     sha256: str
+    datos: dict | None = None
 
     def procedencia(self) -> dict:
-        return {"url": self.url, "consultado": self.consultado, "sha256": self.sha256}
+        p = {"url": self.url, "consultado": self.consultado, "sha256": self.sha256}
+        if self.datos:
+            p["datos"] = self.datos
+        return p
 
 
 _ultima = 0.0
@@ -83,7 +87,7 @@ def obtener(url: str, datos: dict | None = None, vigencia_horas: float = 12, int
     if ruta.exists() and meta.exists() and time.time() - meta.stat().st_mtime < vigencia_horas * 3600:
         contenido = ruta.read_bytes()
         m = json.loads(meta.read_text())
-        return Respuesta(url, contenido, m["consultado"], hashlib.sha256(contenido).hexdigest())
+        return Respuesta(url, contenido, m["consultado"], hashlib.sha256(contenido).hexdigest(), datos)
 
     cuerpo = None
     if datos is not None:
@@ -113,7 +117,7 @@ def obtener(url: str, datos: dict | None = None, vigencia_horas: float = 12, int
     ruta.parent.mkdir(parents=True, exist_ok=True)
     ruta.write_bytes(contenido)
     meta.write_text(json.dumps({"url": url, "datos": datos, "consultado": consultado}))
-    return Respuesta(url, contenido, consultado, hashlib.sha256(contenido).hexdigest())
+    return Respuesta(url, contenido, consultado, hashlib.sha256(contenido).hexdigest(), datos)
 
 
 def _esperar_bloqueo(url: str, cuerpo: bytes | None, esperas: tuple[int, ...]) -> bytes:

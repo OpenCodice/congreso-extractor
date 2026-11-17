@@ -1,7 +1,7 @@
 from collections import Counter
 from pathlib import Path
 
-from congreso import senado, votaciones_senado
+from congreso import cotejo, nombres, senado
 
 FIX = Path(__file__).parent / "fixtures" / "senado"
 
@@ -35,19 +35,30 @@ def test_tabla_cuadra_con_los_conteos():
                     "grupo": "MORENA", "opcion": "yes"}
 
 
-def _indice(*nombres):
-    return [(Counter(senado.clave_tokens(n)), {"id": f"m{i}", "person_id": n}) for i, n in enumerate(nombres)]
+def _indice(*nombres_):
+    personas = {n: {"name": n} for n in nombres_}
+    return nombres.Indice([{"id": f"m{i}", "person_id": n} for i, n in enumerate(nombres_)], personas)
 
 
 def test_nombre_abreviado_unico():
     idx = _indice("José Gerardo Rodolfo Fernández Noroña", "María Lilly del Carmen Téllez García")
-    assert votaciones_senado.mandato("Fernández Noroña, Gerardo", idx)[1] == "nombre abreviado"
-    assert votaciones_senado.mandato("Téllez , Lilly", idx)[0]["id"] == "m1"
+    assert idx.buscar("Fernández Noroña, Gerardo")[1] == "nombre abreviado"
+    assert idx.buscar("Téllez , Lilly")[0]["id"] == "m1"
 
 
 def test_nombre_abreviado_ambiguo_no_se_liga():
     idx = _indice("Ana María López Pérez", "Ana Sofía López Pérez")
-    assert votaciones_senado.mandato("López Pérez, Ana", idx) is None
+    assert idx.buscar("López Pérez, Ana") is None
+
+
+def test_variantes_de_la_gaceta():
+    idx = _indice("Ivonne Aracely Ortega Pacheco", "J. Jesús Jiménez", "Alonso de Jesús Vázquez Jiménez",
+                  "Dulce María Corina Villegas Guarneros", "Arturo Ávila Anaya")
+    assert idx.buscar("Ortega Pacheco Ivonne Aracelly") == ({"id": "m0", "person_id": "Ivonne Aracely Ortega Pacheco"},
+                                                            "nombre (variante ortográfica)")
+    assert idx.buscar("Jiménez J. Jesús")[0]["id"] == "m1"
+    assert idx.buscar("Villegas Guarneros Dulce Ma. Corina")[1] == "nombre"
+    assert idx.buscar("Avila Anaya Francisco Arturo F.")[1] == "nombre ampliado"
 
 
 def _sil(asunto, orden, fecha, denominacion):
@@ -56,16 +67,16 @@ def _sil(asunto, orden, fecha, denominacion):
 
 
 def test_emparejar_en_orden():
-    vs = [dict(senado.votacion(leer(f"votacion_{n}.html")), clave=n) for n in ("5140", "5139")]
+    vs = [dict(senado.votacion(leer(f"votacion_{n}.html")), clave=n, orden=int(n)) for n in ("5140", "5139")]
     den = ("Con proyecto de decreto por el que reforma y adiciona los artículos 82, 116 y 122 de la Constitución "
            "Política de los Estados Unidos Mexicanos, en materia de nacionalidad única para el ejercicio de la "
            "titularidad de los Poderes Ejecutivos Federal y Locales.")
     sil = [_sil("5146374", 1, "2026-09-29", den), _sil("5146374", 2, "2026-09-29", den),
            _sil("9", 1, "2026-09-29", "Que reforma la Ley de Inversión Extranjera.")]
-    e = votaciones_senado.emparejar(vs, sil)
+    e = cotejo.emparejar(vs, sil, "el Senado")
     assert e["5139"]["votacion_sil"] == "sil-5146374-1" and e["5140"]["votacion_sil"] == "sil-5146374-2"
 
 
 def test_sin_par_en_otra_fecha():
-    vs = [dict(senado.votacion(leer("votacion_5139.html")), clave="5139")]
-    assert votaciones_senado.emparejar(vs, [_sil("5146374", 1, "2026-09-30", "nacionalidad única")]) == {}
+    vs = [dict(senado.votacion(leer("votacion_5139.html")), clave="5139", orden=5139)]
+    assert cotejo.emparejar(vs, [_sil("5146374", 1, "2026-09-30", "nacionalidad única")], "el Senado") == {}
