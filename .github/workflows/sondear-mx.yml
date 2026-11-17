@@ -12,6 +12,10 @@ on:
       datos:
         description: Cuerpo de formulario (urlencoded); si se da, cada URL se pide por POST
         required: false
+      extractor:
+        description: Pedir con el cliente del extractor (congreso.red) en vez de curl
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -21,7 +25,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - uses: actions/checkout@v5
+        if: inputs.extractor
+      - name: Descargar con el cliente del extractor
+        if: inputs.extractor
+        env:
+          EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
+          URLS: ${{ inputs.urls }}
+          DATOS: ${{ inputs.datos }}
+          CONGRESO_CACHE: /tmp/cache
+        run: |
+          mkdir sondeo
+          python3 - <<'PY'
+          import os, urllib.parse
+          from congreso import red
+          datos = dict(urllib.parse.parse_qsl(os.environ["DATOS"])) if os.environ.get("DATOS") else None
+          for i, url in enumerate(os.environ["URLS"].split(), 1):
+              try:
+                  r = red.obtener(url, datos, vigencia_horas=0)
+                  open(f"sondeo/{i}.html", "wb").write(r.contenido)
+                  print(i, len(r.contenido), url)
+              except Exception as e:
+                  print(i, "error", e, url)
+          PY
       - name: Descargar
+        if: ${{ !inputs.extractor }}
         env:
           EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
           URLS: ${{ inputs.urls }}
