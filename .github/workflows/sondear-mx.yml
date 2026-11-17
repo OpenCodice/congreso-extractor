@@ -9,6 +9,9 @@ on:
       urls:
         description: URLs separadas por espacios
         required: true
+      datos:
+        description: Cuerpo de formulario (urlencoded); si se da, cada URL se pide por POST
+        required: false
 
 permissions:
   contents: read
@@ -22,13 +25,16 @@ jobs:
         env:
           EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
           URLS: ${{ inputs.urls }}
+          DATOS: ${{ inputs.datos }}
         run: |
           mkdir sondeo
           i=0
           for url in $URLS; do
             i=$((i+1))
             destino=$(python3 -c "import sys,urllib.parse as u; print('https://egress-mx.danielcardeenas.workers.dev/?url=' + u.quote(sys.argv[1], safe=''))" "$url")
-            codigo=$(curl -sS --max-time 120 -H "Authorization: Bearer $EGRESS_MX_TOKEN" -o "sondeo/$i.html" -w '%{http_code}' "$destino" || echo error)
+            envio=()
+            if [ -n "$DATOS" ]; then envio=(--data "$DATOS"); fi
+            codigo=$(curl -sS --max-time 120 -H "Authorization: Bearer $EGRESS_MX_TOKEN" "${envio[@]}" -o "sondeo/$i.html" -w '%{http_code}' "$destino" || echo error)
             printf '%s\t%s\t%s\n' "$i" "$codigo" "$url" | tee -a sondeo/indice.tsv
             sleep 2
           done

@@ -25,7 +25,7 @@ ESPERAS_BLOQUEO = (60, 180, 600, 1200)
 
 
 # Sitios que rechazan conexiones de fuera de México: se piden por el Worker
-# egress-mx de constitucion-extractor, que corre allá (solo GET).
+# egress-mx de constitucion-extractor, que corre allá.
 VIA_MX = {"sitl.diputados.gob.mx", "gaceta.diputados.gob.mx", "www.senado.gob.mx", "senado.gob.mx"}
 EGRESS_MX = "https://egress-mx.danielcardeenas.workers.dev/"
 
@@ -60,11 +60,13 @@ def _ruta(url: str, datos: dict | None) -> Path:
 def _pedir(url: str, cuerpo: bytes | None) -> bytes:
     from urllib.parse import quote, urlsplit
     cabeceras = {"User-Agent": AGENTE}
+    if cuerpo is not None:
+        cabeceras["Content-Type"] = "application/x-www-form-urlencoded"
     destino = url
     if urlsplit(url).hostname in VIA_MX:
         token = os.environ.get("EGRESS_MX_TOKEN")
-        if not token or cuerpo is not None:
-            raise RuntimeError(f"{url} solo responde desde México: hace falta EGRESS_MX_TOKEN (y GET)")
+        if not token:
+            raise RuntimeError(f"{url} solo responde desde México: hace falta EGRESS_MX_TOKEN")
         destino = EGRESS_MX + "?url=" + quote(url, safe="")
         cabeceras["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(destino, data=cuerpo, headers=cabeceras)
