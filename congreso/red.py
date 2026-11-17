@@ -24,8 +24,16 @@ BLOQUEO = b"This page can't be displayed"
 ESPERAS_BLOQUEO = (60, 180, 600, 1200)
 
 
+# Sitios que rechazan conexiones de fuera de México: se piden por el Worker
+# egress-mx de constitucion-extractor, que corre allá (solo GET).
+VIA_MX = {"sitl.diputados.gob.mx", "gaceta.diputados.gob.mx", "www.senado.gob.mx", "senado.gob.mx"}
+EGRESS_MX = "https://egress-mx.danielcardeenas.workers.dev/"
+
+
 class Bloqueado(RuntimeError):
     pass
+
+
 CACHE = Path(os.environ.get("CONGRESO_CACHE", Path(__file__).resolve().parent.parent / ".cache"))
 
 
@@ -49,6 +57,21 @@ def _ruta(url: str, datos: dict | None) -> Path:
     return CACHE / h[:2] / h
 
 
+def _pedir(url: str, cuerpo: bytes | None) -> bytes:
+    from urllib.parse import quote, urlsplit
+    cabeceras = {"User-Agent": AGENTE}
+    destino = url
+    if urlsplit(url).hostname in VIA_MX:
+        token = os.environ.get("EGRESS_MX_TOKEN")
+        if not token or cuerpo is not None:
+            raise RuntimeError(f"{url} solo responde desde México: hace falta EGRESS_MX_TOKEN (y GET)")
+        destino = EGRESS_MX + "?url=" + quote(url, safe="")
+        cabeceras["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(destino, data=cuerpo, headers=cabeceras)
+    with urllib.request.urlopen(req, timeout=120) as r:
+        return r.read()
+
+
 def obtener(url: str, datos: dict | None = None, vigencia_horas: float = 12, intentos: int = 3,
             bloqueos: tuple[int, ...] = ESPERAS_BLOQUEO) -> Respuesta:
     """GET (o POST con `datos`) con caché de `vigencia_horas` (0: siempre descarga)."""
@@ -70,9 +93,7 @@ def obtener(url: str, datos: dict | None = None, vigencia_horas: float = 12, int
         if espera > 0:
             time.sleep(espera)
         try:
-            req = urllib.request.Request(url, data=cuerpo, headers={"User-Agent": AGENTE})
-            with urllib.request.urlopen(req, timeout=90) as r:
-                contenido = r.read()
+            contenido = _pedir(url, cuerpo)
             _ultima = time.monotonic()
             if BLOQUEO in contenido[:2000]:
                 contenido = _esperar_bloqueo(url, cuerpo, bloqueos)
@@ -99,9 +120,7 @@ def _esperar_bloqueo(url: str, cuerpo: bytes | None, esperas: tuple[int, ...]) -
     for espera in esperas:
         print(f"bloqueado por el firewall; espero {espera} s: {url}", file=sys.stderr, flush=True)
         time.sleep(espera)
-        req = urllib.request.Request(url, data=cuerpo, headers={"User-Agent": AGENTE})
-        with urllib.request.urlopen(req, timeout=90) as r:
-            contenido = r.read()
+        contenido = _pedir(url, cuerpo)
         _ultima = time.monotonic()
         if BLOQUEO not in contenido[:2000]:
             return contenido

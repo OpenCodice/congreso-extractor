@@ -1,0 +1,38 @@
+name: Sondear fuentes desde México
+
+# Descarga por egress-mx páginas del SITL, la Gaceta o el Senado y las deja
+# como artefacto, para escribir parsers y pruebas con fixtures reales.
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: URLs separadas por espacios
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  sondear:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Descargar
+        env:
+          EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
+          URLS: ${{ inputs.urls }}
+        run: |
+          mkdir sondeo
+          i=0
+          for url in $URLS; do
+            i=$((i+1))
+            destino=$(python3 -c "import sys,urllib.parse as u; print('https://egress-mx.danielcardeenas.workers.dev/?url=' + u.quote(sys.argv[1], safe=''))" "$url")
+            codigo=$(curl -sS --max-time 120 -H "Authorization: Bearer $EGRESS_MX_TOKEN" -o "sondeo/$i.html" -w '%{http_code}' "$destino" || echo error)
+            printf '%s\t%s\t%s\n' "$i" "$codigo" "$url" | tee -a sondeo/indice.tsv
+            sleep 2
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sondeo
+          path: sondeo/
