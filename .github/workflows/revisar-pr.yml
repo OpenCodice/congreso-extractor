@@ -1,0 +1,96 @@
+name: Revisar PR de congreso-mexicano
+
+# Valida y fusiona un PR de datos de congreso-mexicano. Vive aquí, no en el
+# repo de datos, para que este no tenga ningún workflow: lo llaman
+# actualizar-congreso.yml y resolver-residuos.yml después de abrir su PR, y se
+# puede lanzar a mano para un PR que haya quedado abierto.
+#
+#   validar   — scripts/validar_pr.sh sobre el sha de la cabeza del PR, en un
+#               job sin secretos.
+#   fusionar  — con PR_TOKEN y solo si `validar` pasó, el PR es de una rama
+#               `datos/` del mismo repo y trae `verificado`: lo fusiona con
+#               rebase, atado a ese mismo sha (`--match-head-commit`).
+#
+# main de congreso-mexicano exige PR, historial lineal y aplica a los admins:
+# a main solo se llega por un PR, y los de datos los fusiona este job.
+
+on:
+  workflow_call:
+    inputs:
+      pr:
+        description: Número del PR
+        type: string
+        required: true
+    secrets:
+      PR_TOKEN:
+        required: false
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Número del PR
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.validar.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: OpenCodice/congreso-extractor
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Validar invariantes y commits en la cabeza del PR (GATE)
+        id: validar
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRABAJO: /tmp/validar-pr
+        run: bash scripts/validar_pr.sh "${{ inputs.pr }}"
+
+  fusionar:
+    needs: validar
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fusionar si quedó validado y es de datos
+        env:
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
+          REPO: OpenCodice/congreso-mexicano
+          PR: ${{ inputs.pr }}
+          RESULTADO: ${{ needs.validar.result }}
+          SHA: ${{ needs.validar.outputs.sha }}
+        run: |
+          [ -n "$GH_TOKEN" ] || { echo "::error::Sin PR_TOKEN: no se fusiona."; exit 1; }
+          if [ "$RESULTADO" != success ] || [ -z "$SHA" ]; then
+            echo "::error::El PR #$PR no pasó la validación: no se fusiona."; exit 1
+          fi
+          read -r borrador ajeno rama etiquetas <<< "$(gh pr view "$PR" -R "$REPO" \
+            --json isDraft,isCrossRepository,headRefName,labels \
+            -q '"\(.isDraft) \(.isCrossRepository) \(.headRefName) ,\([.labels[].name] | join(",")),"')"
+          case "$rama" in datos/*) ;; *) echo "La rama $rama no es de datos: queda para revisión."; exit 0 ;; esac
+          [ "$ajeno" = false ] || { echo "PR desde otro repo: no se fusiona."; exit 0; }
+          [ "$borrador" = false ] || { echo "PR en borrador: no se fusiona."; exit 0; }
+          case "$etiquetas" in *,verificado,*) ;; *) echo "Sin etiqueta 'verificado': no se fusiona."; exit 0 ;; esac
+          # Con rebase, para conservar un commit por tipo de dato con su trailer.
+          # Si main avanzó entre la validación y la fusión, se reintenta.
+          for intento in 1 2 3 4 5 6; do
+            read -r estado cabeza <<< "$(gh pr view "$PR" -R "$REPO" --json state,headRefOid -q '"\(.state) \(.headRefOid)"')"
+            case "$estado" in
+              MERGED) echo "El PR #$PR ya está fusionado."; exit 0 ;;
+              OPEN) ;;
+              *) echo "::error::El PR #$PR se cerró sin fusionar."; exit 1 ;;
+            esac
+            [ "$cabeza" = "$SHA" ] || { echo "::error::La cabeza del PR cambió ($cabeza) después de validar $SHA."; exit 1; }
+            if gh pr merge "$PR" -R "$REPO" --rebase --delete-branch --match-head-commit "$SHA"; then
+              echo "PR #$PR fusionado ($SHA)."; exit 0
+            fi
+            sleep $(( (RANDOM % 30) + 15 * intento ))
+          done
+          echo "::error::No se pudo fusionar el PR #$PR tras 6 intentos."; exit 1

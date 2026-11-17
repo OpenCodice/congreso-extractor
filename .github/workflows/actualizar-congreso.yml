@@ -19,6 +19,8 @@ concurrency:
 
 jobs:
   actualizar:
+    outputs:
+      pr: ${{ steps.pr.outputs.pr }}
     runs-on: ubuntu-latest
     # El límite de un runner es de 6 h; la primera corrida, sin caché, rondó las 5.
     timeout-minutes: 355
@@ -135,6 +137,7 @@ jobs:
           done
           echo "::error::No se pudieron publicar las lecturas"; exit 1
       - name: Abrir PR
+        id: pr
         env:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
         run: |
@@ -172,24 +175,32 @@ jobs:
               print(f"- {e[:300]}")
           PY
           gh label create verificado -R OpenCodice/congreso-mexicano --force >/dev/null
-          gh pr create -R OpenCodice/congreso-mexicano --head "$rama" --base main \
+          url=$(gh pr create -R OpenCodice/congreso-mexicano --head "$rama" --base main \
             --title "Datos del Congreso al $(date -u +%Y-%m-%d)" \
-            --body-file ../../cuerpo.md --label verificado
-      - name: Avisar a la web
-        # La web se genera de los datos fusionados: se espera a que revisar-pr
-        # fusione el PR y se pide un despliegue (constitucion-web, deploy.yml).
-        if: success()
-        env:
+            --body-file ../../cuerpo.md --label verificado)
+          echo "pr=${url##*/}" >> "$GITHUB_OUTPUT"
+
+  # Valida y fusiona el PR fuera del repo de datos (revisar-pr.yml).
+  revisar:
+    needs: actualizar
+    if: needs.actualizar.outputs.pr != ''
+    uses: ./.github/workflows/revisar-pr.yml
+    with:
+      pr: ${{ needs.actualizar.outputs.pr }}
+    secrets:
+      PR_TOKEN: ${{ secrets.PR_TOKEN }}
+
+  # La web se genera de los datos fusionados: con el PR ya en main, se pide un
+  # despliegue de constitucion-web (deploy.yml).
+  avisar-web:
+    needs: revisar
+    runs-on: ubuntu-latest
+    steps:
+      - env:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
         run: |
-          for _ in $(seq 1 30); do
-            abiertos=$(gh pr list -R OpenCodice/congreso-mexicano --state open --json headRefName -q '[.[] | select(.headRefName | startswith("datos/"))] | length')
-            [ "$abiertos" = 0 ] && break
-            sleep 30
-          done
           for intento in 1 2 3; do
             gh api repos/OpenCodice/constitucion-web/dispatches -f event_type=datos-actualizados && exit 0
             sleep $((intento * 30))
           done
-          # No falla la actualización: sus datos ya están publicados.
           echo "::warning::No se pudo avisar a la web; se actualizará en su próximo despliegue."

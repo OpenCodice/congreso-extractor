@@ -60,9 +60,18 @@ los decretos, los expedientes. `decretos` lee los trailers de los repos de leyes
 
 `.github/workflows/actualizar-congreso.yml` corre los cuatro pasos, valida y
 abre en `congreso-mexicano` un PR `verificado` con un commit por tipo de dato
-(`scripts/commits.py`: padrón, votaciones, asuntos, decretos; trailer `Tipo`). Su
-`revisar-pr` corre `validar` y lo fusiona con rebase. Un expediente que no
-cuadra se omite y se anota en el PR; el resto se publica. Lo lanza el Worker
+(`scripts/commits.py`: padrón, votaciones, asuntos, decretos y fuentes;
+trailer `Tipo`). El repo de datos no tiene workflows: su PR lo valida y
+fusiona `revisar-pr.yml` de este repo, que llaman `actualizar-congreso.yml` y
+`resolver-residuos.yml` al abrirlo (y se lanza a mano con `gh workflow run
+revisar-pr.yml -f pr=N`). Su job `validar`, sin secretos, corre
+`scripts/validar_pr.sh` sobre el sha de la cabeza del PR: `congreso validar` y
+`scripts/validar_commits.py` (un `Tipo` conocido por commit, que solo toca sus
+carpetas, sin merges). `fusionar`, con PR_TOKEN, lo fusiona con rebase atado a
+ese sha, solo si es de una rama `datos/` del mismo repo y trae `verificado`.
+main de congreso-mexicano exige PR, historial lineal y aplica a los admins: un
+cambio a mano (la documentación, `Tipo: indice`) también va por PR. Un
+expediente que no cuadra se anota en el PR; el resto se publica. Lo lanza el Worker
 `scheduler` de `constitucion-extractor` cada lunes a las 18:00 UTC, después de
 las vigilancias de leyes. Al fusionarse el PR, avisa a `constitucion-web`
 (`repository_dispatch` datos-actualizados) para que la web se regenere.
