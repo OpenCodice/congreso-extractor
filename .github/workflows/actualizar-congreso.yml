@@ -34,9 +34,6 @@ jobs:
         run: |
           mkdir -p ../repos
           git clone -q "https://x-access-token:${GH_TOKEN}@github.com/OpenCodice/congreso-mexicano.git" ../repos/congreso-mexicano
-          for r in constitucion-mexicana leyes-federales fiscal-mexicano; do
-            git clone -q --filter=blob:none "https://github.com/OpenCodice/$r.git" "../repos/$r"
-          done
       - name: Pruebas
         run: pip install -q pytest && python -m pytest -q
       - name: Padrón
@@ -56,7 +53,13 @@ jobs:
           EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
         run: python -m congreso gaceta --out ../repos/congreso-mexicano --legislatura "$LEG" > ../gaceta.json
       - name: Decretos
-        run: python -m congreso decretos --out ../repos/congreso-mexicano --repos ../repos > ../decretos.json
+        # Los repos de leyes se clonan aquí, tras horas de descargas, para
+        # ligar cada decreto con los commits vigentes de su (Documento, Publicacion).
+        run: |
+          for r in constitucion-mexicana leyes-federales fiscal-mexicano; do
+            git clone -q --filter=blob:none "https://github.com/OpenCodice/$r.git" "../repos/$r"
+          done
+          python -m congreso decretos --out ../repos/congreso-mexicano --repos ../repos > ../decretos.json
       - name: Validar (GATE)
         run: python -m congreso validar --out ../repos/congreso-mexicano
       - name: Abrir PR
