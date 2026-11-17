@@ -4,6 +4,7 @@
     python -m congreso votaciones --out ../congreso-mexicano --legislatura 66 [--asunto 5135887]
     python -m congreso senado     --out ../congreso-mexicano --legislatura 66 [--votacion 5139]
     python -m congreso gaceta     --out ../congreso-mexicano --legislatura 66 [--tabla tabla3or1-3]
+    python -m congreso asuntos    --out ../congreso-mexicano --legislatura 66 [--tipo 11]
     python -m congreso decretos   --out ../congreso-mexicano --repos ..
     python -m congreso validar    --out ../congreso-mexicano
     python -m congreso residuos   {pendientes,para-juicio,verificar} --out ../congreso-mexicano --trabajo /tmp/r [--repos ..]
@@ -41,6 +42,11 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--legislatura", type=int, required=True)
     a.add_argument("--tabla", action="append", help="p. ej. tabla3or1-3")
 
+    a = sub.add_parser("asuntos", help="iniciativas, proposiciones y dictámenes negativos del SIL")
+    a.add_argument("--out", type=Path, required=True)
+    a.add_argument("--legislatura", type=int, required=True)
+    a.add_argument("--tipo", action="append", help="tipo de asunto del SIL (11, 19, 74639); todos por omisión")
+
     a = sub.add_parser("decretos")
     a.add_argument("--out", type=Path, required=True)
     a.add_argument("--repos", type=Path, required=True, help="carpeta con los repos de leyes")
@@ -67,6 +73,9 @@ def main(argv: list[str] | None = None) -> int:
     elif args.orden == "gaceta":
         from . import votaciones_gaceta
         r = votaciones_gaceta.construir(args.out, args.legislatura, set(args.tabla) if args.tabla else None)
+    elif args.orden == "asuntos":
+        from . import asuntos
+        r = asuntos.construir(args.out, args.legislatura, args.tipo)
     elif args.orden == "decretos":
         from . import decretos
         r = decretos.construir(args.out, args.repos)

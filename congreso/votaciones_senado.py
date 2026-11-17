@@ -41,7 +41,7 @@ def evento(leg: str, v: dict, filas: list[dict], idx: nombres.Indice, fuentes: l
         "votes": votos,
         "sources": fuentes,
         **({"votos_faltantes": cotejo.faltantes(sin_mandato)} if sin_mandato else {}),
-        **({"inconsistencias": inconsistencias + otras} if inconsistencias + otras else {}),
+        **({"inconsistencias": list(dict.fromkeys(inconsistencias + otras))} if inconsistencias + otras else {}),
     }
 
 
@@ -98,8 +98,13 @@ def escribir(raiz: Path, leg: str, camara: str, leidas, enlaces, eventos_sil, ha
         escritas += 1
     retiradas = 0
     if vigentes is not None:
-        for ruta in sorted((raiz / "votaciones" / leg / camara).glob(f"{prefijo}*.json")):
-            if ruta.stem not in vigentes:
+        ausentes = [r for r in sorted((raiz / "votaciones" / leg / camara).glob(f"{prefijo}*.json"))
+                    if r.stem not in vigentes and "retirada_de_la_fuente" not in datos.leer(raiz, r.relative_to(raiz).as_posix())]
+        # Muchas de golpe apuntan a una lectura incompleta de la fuente, no a retiros.
+        if len(ausentes) > max(5, len(vigentes) // 10):
+            errores.append(f"{len(ausentes)} votaciones publicadas no aparecen en la fuente; no se marcan como retiradas")
+        else:
+            for ruta in ausentes:
                 retiradas += datos.marcar_retirada(raiz, ruta.relative_to(raiz).as_posix())
     return {"votaciones": escritas, "ligadas": ligadas, "retiradas_de_la_fuente": retiradas,
             "con_par_sil": sum(1 for x in enlaces.values() if "votacion_sil" in x),

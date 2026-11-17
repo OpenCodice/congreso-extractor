@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 from collections import Counter
 from pathlib import Path
@@ -17,6 +18,11 @@ from . import datos
 
 # "not voting": la Gaceta lo registra como quórum (pasó lista y no votó).
 OPCIONES = {"yes", "no", "abstain", "absent", "not voting"}
+
+
+def _contenido(ruta: Path) -> bytes:
+    """Lo que se descargó: la huella es del original, no de la copia comprimida."""
+    return gzip.decompress(ruta.read_bytes()) if ruta.suffix == ".gz" else ruta.read_bytes()
 
 
 def validar(raiz: Path) -> list[str]:
@@ -35,7 +41,7 @@ def validar(raiz: Path) -> list[str]:
                 ruta = raiz / s["archivo"]
                 if not ruta.exists():
                     errores.append(f"{donde}: falta la copia {s['archivo']}")
-                elif hashlib.sha256(ruta.read_bytes()).hexdigest() != s["sha256"]:
+                elif hashlib.sha256(_contenido(ruta)).hexdigest() != s["sha256"]:
                     errores.append(f"{donde}: la copia {s['archivo']} no coincide con su huella")
 
     for m in mandatos.values():
@@ -119,6 +125,22 @@ def validar(raiz: Path) -> list[str]:
             if not x.get("asunto") or x.get("camara") not in ("diputados", "senado", "permanente", None):
                 errores.append(f"{d}: votación económica mal formada {x}")
         fuentes(e, d)
+
+    for carpeta in ("iniciativas", "proposiciones", "dictamenes-negativos"):
+        for a in datos.todos(raiz, carpeta):
+            d = f"{carpeta} {a['id']}"
+            if a.get("expediente_id") and a["expediente_id"] not in expedientes:
+                errores.append(f"{d}: expediente {a['expediente_id']} no existe")
+            for p in a["presentadores"]:
+                if "mandato_id" in p:
+                    m = mandatos.get(p["mandato_id"])
+                    if not m:
+                        errores.append(f"{d}: mandato {p['mandato_id']} no existe")
+                    elif m["person_id"] != p.get("person_id"):
+                        errores.append(f"{d}: el mandato {m['id']} no es de {p.get('person_id')}")
+                if p.get("organization_id") and p["organization_id"] not in orgs:
+                    errores.append(f"{d}: organización {p['organization_id']} no existe")
+            fuentes(a, d)
 
     ligados = Counter()
     for dec in datos.todos(raiz, "decretos"):

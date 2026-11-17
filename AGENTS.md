@@ -19,6 +19,10 @@ fuera de la biblioteca estándar de Python 3.12.
   (`senado-…`, `gaceta-…`); `cotejo.py`, cómo se ligan a la votación del SIL
   y qué se anota cuando difieren; `nombres.py`, cómo se liga el nombre de
   cada fuente a un mandato.
+- `asuntos.py` — iniciativas, proposiciones con punto de acuerdo y dictámenes
+  en sentido negativo de la legislatura, desde el buscador avanzado del SIL
+  (por meses; un mes que pasa de 999 filas se parte). El autor se liga por
+  `Referencia`; un registro solo se reescribe si cambió lo que dice la fuente.
 - `padron.py`, `votaciones.py`, `decretos.py` — arman los registros Popolo y
   sus extensiones; `validar.py`, los invariantes del repo de datos.
 - `residuos.py` — los decretos que `decretos` no liga a su expediente, para el
@@ -37,6 +41,7 @@ python3 -m congreso padron     --out ../congreso-mexicano --legislatura 66 --cam
 python3 -m congreso votaciones --out ../congreso-mexicano --legislatura 66 [--asunto 5135887]
 EGRESS_MX_TOKEN=… python3 -m congreso senado --out ../congreso-mexicano --legislatura 66
 EGRESS_MX_TOKEN=… python3 -m congreso gaceta --out ../congreso-mexicano --legislatura 66
+python3 -m congreso asuntos    --out ../congreso-mexicano --legislatura 66 [--tipo 11]
 python3 -m congreso decretos   --out ../congreso-mexicano --repos ..
 python3 -m congreso validar    --out ../congreso-mexicano
 python3 -m congreso residuos pendientes --out ../congreso-mexicano --repos .. --trabajo /tmp/r
@@ -44,14 +49,15 @@ python3 -m pytest -q
 ```
 
 El orden importa: las votaciones necesitan el padrón; las del Senado y la
-Gaceta, las del SIL (para ligarse); los decretos, los expedientes. `decretos` lee los trailers de los repos de leyes clonados en
+Gaceta, las del SIL (para ligarse); los asuntos, el padrón y los expedientes;
+los decretos, los expedientes. `decretos` lee los trailers de los repos de leyes clonados en
 `--repos`.
 
 ## Actualización
 
 `.github/workflows/actualizar-congreso.yml` corre los cuatro pasos, valida y
 abre en `congreso-mexicano` un PR `verificado` con un commit por tipo de dato
-(`scripts/commits.py`: padrón, votaciones, decretos; trailer `Tipo`). Su
+(`scripts/commits.py`: padrón, votaciones, asuntos, decretos; trailer `Tipo`). Su
 `revisar-pr` corre `validar` y lo fusiona con rebase. Un expediente que no
 cuadra se omite y se anota en el PR; el resto se publica. Lo lanza el Worker
 `scheduler` de `constitucion-extractor` cada lunes a las 18:00 UTC, después de

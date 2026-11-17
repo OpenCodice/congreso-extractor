@@ -62,7 +62,7 @@ def _procedencia(r: red.Respuesta) -> tuple[dict, tuple[str, bytes]]:
 
 def atribuir(votos: list[dict], indice: dict, camaras: set[str]) -> tuple[list[dict], list[dict], list[str]]:
     """Votos ligados a un único mandato, filas sin ligar (para `votos_faltantes`) e inconsistencias."""
-    salida, sin_ligar, inconsistencias = [], [], []
+    salida, sin_ligar, inconsistencias, ligadas = [], [], [], []
     for v in votos:
         fila = {"grupo": v["partido"], "opcion": v["opcion"], "nombre": v["fuente_nombre"]}
         if v["camara"] not in camaras:
@@ -73,14 +73,26 @@ def atribuir(votos: list[dict], indice: dict, camaras: set[str]) -> tuple[list[d
         if len(candidatos) != 1:
             sin_ligar.append(fila)
         else:
-            m = candidatos[0]
-            salida.append({
-                "voter_id": m["person_id"],
-                "mandato_id": m["id"],
-                "option": v["opcion"],
-                "group_id": catalogos.partido(v["partido"]),
-                "grupo_fuente": v["partido"],
-            })
+            ligadas.append((v, fila, candidatos[0]))
+    # Dos filas que dan con la misma persona: ninguna se le atribuye.
+    veces = Counter(m["person_id"] for _, _, m in ligadas)
+    for p, n in veces.items():
+        if n > 1:
+            inconsistencias.append(f"{n} filas se ligan a la misma persona {p}; no se atribuyen")
+    for v, fila, m in ligadas:
+        if veces[m["person_id"]] > 1:
+            sin_ligar.append(fila)
+            continue
+        grupo, aviso = cotejo.grupo(v["partido"])
+        if aviso:
+            inconsistencias.append(aviso)
+        salida.append({
+            "voter_id": m["person_id"],
+            "mandato_id": m["id"],
+            "option": v["opcion"],
+            "group_id": grupo,
+            "grupo_fuente": v["partido"],
+        })
     return salida, sin_ligar, inconsistencias
 
 
@@ -184,7 +196,7 @@ def eventos_de_asunto(leg: str, fila: dict, indice: dict) -> tuple[list[dict], l
             evento["votes"], sin_ligar, otras = atribuir(votos, indice, camaras)
             faltan += cotejo.faltantes(sin_ligar)
             if inconsistencias + otras:
-                evento["inconsistencias"] = inconsistencias + otras
+                evento["inconsistencias"] = list(dict.fromkeys(inconsistencias + otras))
             evento["votos_publicados"] = True
             evento["tramite"] = detalle["tramite"]
             ausentes = sum(g["absent"] for g in detalle["grupos"] if g["grupo"] != "Total")
@@ -242,14 +254,23 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
         "id": "comision-permanente", "name": "Comisión Permanente", "classification": "committee",
         "parent_id": "congreso-de-la-union"})
     r = red.obtener(sil.URL_BUSQUEDA_VOTACIONES, sil.formulario_votaciones(legislatura))
-    filas = sil.resultados_votacion(sil.decodificar(r.contenido))
+    documento = sil.decodificar(r.contenido)
+    filas = sil.resultados_votacion(documento)
     if not filas:
         raise RuntimeError("el buscador de votaciones no devolvió filas")
+    total = sil.encontrados(documento)
+    # De la búsqueda dependen los retiros: tiene que estar completa.
+    if total is not None and total != len(filas):
+        raise RuntimeError(f"el buscador de votaciones dice {total} y da {len(filas)} filas")
     if solo:
         # Un expediente se escribe completo: se toman todos sus dictámenes.
         seguimientos = {f["seguimiento"] for f in filas if f["clave"] in solo}
         filas = [f for f in filas if f["seguimiento"] in seguimientos]
     indice = indice_mandatos(raiz, leg)
+    # Votaciones del SIL ya publicadas, por expediente.
+    votaciones_de: dict[str, list[Path]] = {}
+    for ruta in sorted((raiz / "votaciones" / leg).glob("*/sil-*.json")):
+        votaciones_de.setdefault(datos.leer(raiz, ruta.relative_to(raiz).as_posix())["expediente_id"], []).append(ruta)
 
     por_seguimiento: dict[str, list[dict]] = {}
     for f in filas:
@@ -273,11 +294,11 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
         exp["votaciones"] = sorted(e["id"] for e in eventos)
         for sha, contenido in copias:
             datos.guardar_fuente(raiz, sha, contenido)
-        for f in dictamenes:
-            # Una votación que el SIL ya no reporta se conserva, marcada.
-            for viejo in (raiz / "votaciones" / leg).glob(f"*/sil-{f['clave']}-*.json"):
-                if viejo.stem not in exp["votaciones"]:
-                    datos.marcar_retirada(raiz, viejo.relative_to(raiz).as_posix())
+        # Una votación del expediente que el SIL ya no reporta (también la de un
+        # dictamen que salió del expediente) se conserva, marcada.
+        for ruta in votaciones_de.get(f"sil-{seg}", []):
+            if ruta.stem not in exp["votaciones"]:
+                datos.marcar_retirada(raiz, ruta.relative_to(raiz).as_posix())
         for e in eventos:
             datos.escribir(raiz, f"votaciones/{leg}/{e['camara']}/{e['id']}.json", e)
             escritos += 1
@@ -288,8 +309,9 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
         # fue retirado de la fuente.
         ausentes = []
         for e in datos.todos(raiz, "expedientes"):
-            rutas = [r for vid in e["votaciones"] for r in (raiz / "votaciones" / leg).glob(f"*/{vid}.json")]
-            if rutas and e["seguimiento"] not in por_seguimiento:
+            rutas = votaciones_de.get(e["id"], [])
+            # Los ya marcados no cuentan para el tope: solo lo que desaparece ahora.
+            if rutas and e["seguimiento"] not in por_seguimiento and "retirada_de_la_fuente" not in e:
                 ausentes.append((e, rutas))
         # Muchos de golpe apuntan a una búsqueda incompleta, no a retiros.
         if len(ausentes) > max(5, len(por_seguimiento) // 10):
@@ -297,7 +319,7 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
         else:
             for e, rutas in ausentes:
                 retiradas += datos.marcar_retirada(raiz, f"expedientes/{e['id']}.json")
-                for r in rutas:
-                    datos.marcar_retirada(raiz, r.relative_to(raiz).as_posix())
+                for ruta in rutas:
+                    datos.marcar_retirada(raiz, ruta.relative_to(raiz).as_posix())
     return {"retirados_de_la_fuente": retiradas,"expedientes": len(por_seguimiento) - len(errores), "votaciones": escritos,
             "omitidos": len(errores), "errores": errores, "busqueda": r.procedencia()}

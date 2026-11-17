@@ -44,7 +44,7 @@ def evento(leg: str, v: dict, filas: list[dict], idx, fuentes: list[dict]) -> di
         "group_results": [dict(grupo=g, **c) for g, c in v["conteos"].items() if g != "Total"],
         "sources": fuentes,
         **({"votos_faltantes": cotejo.faltantes(sin_mandato)} if sin_mandato else {}),
-        **({"inconsistencias": inconsistencias + otras} if inconsistencias + otras else {}),
+        **({"inconsistencias": list(dict.fromkeys(inconsistencias + otras))} if inconsistencias + otras else {}),
     }
 
 
@@ -55,11 +55,17 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     if not urls:
         raise RuntimeError("el índice de votaciones de la Gaceta está vacío")
     votaciones, errores = [], []
+    completo = True
     for url in urls:
         rp = red.obtener(url)
-        votaciones += gaceta.periodo(gaceta.decodificar(rp.contenido))
-    # El índice y todos los periodos se leyeron: es todo lo que la Gaceta publica hoy.
-    vigentes = None if solo else {f"gaceta-{x['tabla'].removeprefix('tabla')}" for x in votaciones}
+        del_periodo = gaceta.periodo(gaceta.decodificar(rp.contenido))
+        if not del_periodo:
+            # Un periodo publicado sin votaciones es una página que no se leyó bien.
+            errores.append(f"la página del periodo {url} no trae votaciones")
+            completo = False
+        votaciones += del_periodo
+    # Con el índice y todos los periodos leídos, es todo lo que la Gaceta publica hoy.
+    vigentes = None if solo or not completo else {f"gaceta-{x['tabla'].removeprefix('tabla')}" for x in votaciones}
     if solo:
         votaciones = [x for x in votaciones if x["tabla"] in solo]
     eventos_sil = [e for e in datos.todos(raiz, f"votaciones/{leg}/diputados") if e["id"].startswith("sil-")]

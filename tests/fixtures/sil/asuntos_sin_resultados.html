@@ -1,0 +1,57 @@
+<html>
+<head>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-BHE22ZZ05R"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-BHE22ZZ05R');
+</script>
+<!-- Termina Google tag   -->
+
+<title>
+SIL - Sistema de Información Legislativa-Resultados de Asuntos Legislativos
+</title>
+<link href="/template/skin/style.css" rel="stylesheet" type="text/css">
+<script type="text/jscript" src="/Script/mm.class.js"></script>
+</head>
+<div id='main' class='subtitle' style='visibility:visible;' align='center'>
+<br>
+B&uacute;squeda en proceso...
+<br><br>
+<input type='image' src='/template/skin/processbar.gif'>
+<br><br>
+<input type='image' src='/template/skin/cancelar.jpg' onclick='window.close(); return (false);'>
+</div>
+
+<div id='Contenedor' style="visibility: hidden;  width:0pt;  height:0pt">
+<table border="0" cellpadding="0" cellspacing="0" align="center">
+    <tr>
+        <td height="20">
+        </td>
+    </tr>
+    <tr>
+        <td class="simpletextorange" align="center">
+                No hay resultados con los criterios seleccionados.
+        </td>
+    </tr>
+</table>
+<br>
+<HR size='2px' width='80%' color='#000000'><br><br>
+<table border='0' width='100%' align='center'>
+     <tr>
+        <td width='100%' align='center'>
+            <input type='image' src='/template/skin/cerrar.jpg' onClick='window.close(); return(false);'>
+        </td>
+    </tr>
+</table></div>
+<script language='javascript'>
+    var Contenedor=document.getElementById('Contenedor');
+    var Main=document.getElementById('main')
+    Main.innerHTML='';
+    Main.innerHTML=Contenedor.innerHTML;
+    Contenedor.innerHTML=''
+</script>

@@ -61,6 +61,8 @@ jobs:
         env:
           EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
         run: python -m congreso gaceta --out ../repos/congreso-mexicano --legislatura "$LEG" > ../gaceta.json
+      - name: Iniciativas, proposiciones y dictámenes negativos
+        run: python -m congreso asuntos --out ../repos/congreso-mexicano --legislatura "$LEG" > ../asuntos.json
       - name: Decretos
         # Los repos de leyes se clonan aquí, tras horas de descargas, para
         # ligar cada decreto con los commits vigentes de su (Documento, Publicacion).
@@ -97,8 +99,11 @@ jobs:
           print(f"Expedientes: {v['expedientes']} · votaciones: {v['votaciones']} · omitidos: {v['omitidos']}")
           print(f"Gaceta (Diputados): {g['votaciones']} votaciones · ligadas a un expediente: {g['ligadas']} · con par en el SIL: {g['con_par_sil']} · omitidas: {g['omitidas']}")
           print(f"Senado: {s['votaciones']} votaciones · ligadas a un expediente: {s['ligadas']} · con par en el SIL: {s['con_par_sil']} · omitidas: {s['omitidas']}")
+          a = json.load(open("../../asuntos.json"))
+          for k, x in a.items():
+              print(f"{k}: {x['asuntos']} · cambiados: {x['escritos']} · retirados de la fuente: {x['retirados_de_la_fuente']} · autores sin mandato: {x['autores_sin_mandato']}")
           print(f"Decretos: {d['decretos']} · con expediente: {d['con_expediente']} · ambiguos: {d['ambiguos']} · sin decreto: {d['sin_decreto']}")
-          for e in (v["errores"] + s["errores"] + g["errores"] + d["avisos"])[:80]:
+          for e in (v["errores"] + s["errores"] + g["errores"] + [x for k in a.values() for x in k["errores"]] + d["avisos"])[:80]:
               print(f"- {e[:300]}")
           PY
           gh label create verificado -R OpenCodice/congreso-mexicano --force >/dev/null

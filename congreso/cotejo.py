@@ -72,6 +72,15 @@ def faltantes(sin_mandato: list[dict]) -> list[dict]:
     return [{"grupo": g, "option": o, "value": len(n), "nombres_fuente": n} for (g, o), n in sorted(grupos.items())]
 
 
+def grupo(etiqueta: str) -> tuple[str | None, str | None]:
+    """Organización del grupo parlamentario; un grupo que el catálogo no conoce
+    no impide publicar el voto: queda sin `group_id` y se anota."""
+    try:
+        return catalogos.partido(etiqueta), None
+    except KeyError:
+        return None, f"grupo {etiqueta!r} desconocido en el catálogo"
+
+
 def votos(filas: list[dict], indice, extra=lambda f: {}) -> tuple[list[dict], list[dict], list[str]]:
     """Filas de la fuente → votos Popolo ligados a su mandato, las filas que no
     se ligan (se declaran con su nombre en `votos_faltantes`) e inconsistencias."""
@@ -91,8 +100,11 @@ def votos(filas: list[dict], indice, extra=lambda f: {}) -> tuple[list[dict], li
         if veces[m["person_id"]] > 1:
             sin_mandato.append(f)
             continue
+        g, aviso = grupo(f["grupo"])
+        if aviso:
+            inconsistencias.append(aviso)
         salida.append({"voter_id": m["person_id"], "mandato_id": m["id"], "option": f["opcion"],
-                       "group_id": catalogos.partido(f["grupo"]), "grupo_fuente": f["grupo"], **extra(f),
+                       "group_id": g, "grupo_fuente": f["grupo"], **extra(f),
                        **({"enlace": criterio} if criterio != "nombre" else {})})
     return salida, sin_mandato, inconsistencias
 

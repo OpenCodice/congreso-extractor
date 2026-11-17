@@ -354,3 +354,118 @@ def resultados_votacion(documento: str) -> list[dict]:
             "publicado_dof": fecha_estatus_dof(fila[10].plano),
         })
     return salida
+
+
+# ---------------------------------------------------------------- asuntos
+
+URL_BUSQUEDA_ASUNTOS = f"{BASE}/Busquedas/Avanzada/ProcesoBusquedaAvanzada.php?SID="
+# Tipos de asunto del buscador avanzado (`TASUNTO_AR[]`).
+TIPO_INICIATIVA = "11"
+TIPO_PROPOSICION = "19"
+TIPO_DICTAMEN_NEGATIVO = "74639"
+# El buscador da a lo más esto por página.
+MAX_FILAS = 999
+
+_CLAVE_ASUNTO = re.compile(r"[?&]Clave=(\d+)")
+_SEG_ASUNTO = re.compile(r"Seguimiento=(\d+)&Asunto=(\d+)")
+_ENCONTRADOS = re.compile(r"encontrados:\s*(\d+)", re.I)
+_FECHA_ESTATUS = re.compile(r"\bel (\d{2})-([A-Z]{3})-(\d{4})\s*$")
+_COMISION = re.compile(r"^\d+\.-\s*(.+?)\s+-\s*(.+?)\s*\.-\s*(.+)$")
+_NUMERAL = re.compile(r"^\d+\.-\s*")
+# Etiquetas de grupo parlamentario que el SIL pone como presentador.
+_GRUPOS = {"Morena", "PAN", "PRI", "PVEM", "PT", "MC", "PRD", "PES", "Ind.", "Sin Partido"}
+
+
+def formulario_asuntos(legislatura: int, tipo: str, desde: str, hasta: str) -> dict:
+    """Campos del buscador avanzado: los asuntos de un tipo presentados entre
+    `desde` y `hasta` (dd/mm/aaaa), en una sola página."""
+    return {
+        "LEGISLATURA": str(legislatura), "TASUNTO_AR[]": [tipo], "OPCION_TEXTO": "2", "VALOR_TEXTO": "",
+        "PRESENTADOR": "null", "RESULTADO": "9", "CAMARA_PRESENTADOR[]": ["1", "2", "5"],
+        "FECHA_INIC": desde, "FECHA_FIN": hasta, "PAGINAS": str(MAX_FILAS),
+    }
+
+
+def _presentadores(celda: Celda) -> list[dict]:
+    """'Dip. A Dip. B' con un enlace de perfil por legislador, o un texto sin
+    enlace (un grupo parlamentario, el Ejecutivo, un congreso local)."""
+    refs = [m[1] for e in celda.enlaces if "pp_PerfilLegislador" in e for m in [_REFERENCIA.search(e)] if m]
+    comisiones = [m[1] for e in celda.enlaces if "pp_ComposicionComisiones" in e for m in [_REFERENCIA.search(e)] if m]
+    if comisiones and not refs:
+        # Un dictamen lo presentan comisiones: "Senado: Estudios Legislativos, Segunda Senado: Seguridad Pública".
+        nombres = [n.strip() for n in re.split(r"(?=\b(?:Senado|Diputados|Comisión Permanente):)", celda.plano)
+                   if n.strip()]
+        if len(nombres) == len(comisiones):
+            return [{"nombre": n, "comision": r} for n, r in zip(nombres, comisiones)]
+        return [{"nombre": celda.plano, "comisiones": comisiones}]
+    partes = [n.strip() for n in re.split(r"(?=\b(?:Dip|Sen)\.\s)", celda.plano) if n.strip()]
+    salida = []
+    # Antes de los legisladores pueden venir grupos parlamentarios: "PAN Morena Dip. …".
+    if partes and not re.match(r"(?:Dip|Sen)\.\s", partes[0]):
+        previo = partes.pop(0)
+        etiquetas = previo.split()
+        salida += [{"nombre": e} for e in etiquetas] if all(e in _GRUPOS for e in etiquetas) else [{"nombre": previo}]
+    if refs and len(refs) == len(partes):
+        return salida + [{"nombre": n, "referencia": r} for n, r in zip(partes, refs)]
+    if refs or partes:
+        # Sin correspondencia uno a uno: se conserva el texto y las referencias, sin emparejar.
+        return salida + [{"nombre": " ".join(partes), "referencias": refs}]
+    return salida
+
+
+def _comisiones(celda: Celda) -> list[dict]:
+    refs = [m[1] for e in celda.enlaces for m in [_REFERENCIA.search(e)] if m]
+    lineas = [l for l in celda.lineas() if _NUMERAL.match(l)]
+    salida = []
+    for i, l in enumerate(lineas):
+        m = _COMISION.match(l)
+        c = {"texto": l}
+        if m:
+            c.update(camara=m[1], comision=m[2], turno=m[3])
+        if len(refs) == len(lineas):
+            c["referencia"] = refs[i]
+        salida.append(c)
+    return salida
+
+
+def estatus_asunto(texto: str) -> dict:
+    """'Pendiente en comisión(es) de origen el 07-OCT-2025' → texto, estado y fecha."""
+    m = _FECHA_ESTATUS.search(texto)
+    fecha = f"{m[3]}-{_MESES[m[2]]:02d}-{m[1]}" if m and m[2] in _MESES else None
+    return {"texto": texto, "estado": texto[:m.start()].strip() if m else texto, "fecha": fecha}
+
+
+def encontrados(documento: str) -> int | None:
+    """Cuántos resultados dice tener una página de búsqueda del SIL."""
+    m = _ENCONTRADOS.search(re.sub(r"<[^>]+>", " ", documento))
+    return int(m[1]) if m else None
+
+
+def asuntos(documento: str) -> tuple[int | None, list[dict]]:
+    """Resultados del buscador avanzado: cuántos dice haber y una fila por asunto."""
+    plano = re.sub(r"<[^>]+>", " ", documento)
+    if "No hay resultados con los criterios seleccionados" in plano:
+        return 0, []
+    m = _ENCONTRADOS.search(plano)
+    salida = []
+    for fila in filas(documento):
+        if len(fila) != 12 or not fila[0].plano.isdigit():
+            continue
+        clave = next((m[1] for e in fila[2].enlaces for m in [_CLAVE_ASUNTO.search(e)] if m), None)
+        seg = next((m for e in fila[10].enlaces for m in [_SEG_ASUNTO.search(e)] if m), None)
+        salida.append({
+            "clave": clave or (seg[2] if seg else None),
+            "seguimiento": seg[1] if seg else None,
+            "tipo": fila[1].plano,
+            "denominacion": fila[2].plano,
+            "subclasificacion": fila[3].plano or None,
+            "camara": fila[4].plano or None,
+            "fecha": fecha_iso(fila[5].plano),
+            "presentadores": _presentadores(fila[6]),
+            "partido": fila[7].plano,
+            "legislatura": fila[8].plano,
+            "comisiones": _comisiones(fila[9]),
+            "estatus": estatus_asunto(fila[10].plano),
+            "temas": [_NUMERAL.sub("", l) for l in fila[11].lineas() if _NUMERAL.match(l)],
+        })
+    return (int(m[1]) if m else None), salida
