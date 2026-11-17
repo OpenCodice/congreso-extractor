@@ -20,6 +20,20 @@ def escribir(raiz: Path, relativa: str, registro: dict) -> bool:
     return True
 
 
+def marcar_retirada(raiz: Path, relativa: str, hoy: str | None = None) -> bool:
+    """Conserva un registro que su fuente dejó de publicar, con la fecha en que
+    se notó. Devuelve True si no estaba marcado. Si la fuente lo vuelve a
+    publicar, el registro se reescribe completo y la marca desaparece."""
+    from datetime import date
+    r = leer(raiz, relativa)
+    if r is None or "retirada_de_la_fuente" in r:
+        return False
+    r["retirada_de_la_fuente"] = {"detectada": hoy or date.today().isoformat(),
+                                  "nota": "la fuente dejó de publicarlo; se conserva la última versión obtenida"}
+    escribir(raiz, relativa, r)
+    return True
+
+
 def leer(raiz: Path, relativa: str) -> dict | None:
     ruta = raiz / relativa
     return json.loads(ruta.read_text(encoding="utf-8")) if ruta.exists() else None

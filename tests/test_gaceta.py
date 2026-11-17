@@ -1,10 +1,7 @@
 from collections import Counter
 from pathlib import Path
 
-import pytest
-
-from congreso import gaceta
-from congreso.cotejo import Omitida
+from congreso import cotejo, gaceta
 from congreso.votaciones_gaceta import evento
 
 FIX = Path(__file__).parent / "fixtures" / "gaceta"
@@ -64,7 +61,19 @@ def test_evento_cuadra_con_la_tabla():
     assert len(e["votes"]) == 499 and e["counts"][0] == {"option": "yes", "value": 344}
 
 
-def test_evento_con_lista_incompleta_se_omite():
+def test_evento_con_lista_incompleta_se_publica_con_inconsistencias():
     filas = gaceta.lista(leer("lista_3or1_evento3_contra.html"))
-    with pytest.raises(Omitida):
-        evento("lxvi", _v("tabla3or1-3.html"), filas, _Indice(), [])
+    e = evento("lxvi", _v("tabla3or1-3.html"), filas, _Indice(), [])
+    assert len(e["votes"]) == 155 and "Total yes: 0 en la lista, 344 en la tabla" in e["inconsistencias"]
+    assert e["counts"][0] == {"option": "yes", "value": 344}
+
+
+class _IndiceRepetido:
+    def buscar(self, nombre):
+        return {"id": "m-x", "person_id": "x"}, "nombre"
+
+
+def test_dos_filas_de_la_misma_persona_no_se_atribuyen():
+    filas = gaceta.lista(leer("lista_3or1_evento3_favor.html"))[:2]
+    votos, sin_mandato, inconsistencias = cotejo.votos(filas, _IndiceRepetido())
+    assert votos == [] and sin_mandato == filas and "misma persona x" in inconsistencias[0]

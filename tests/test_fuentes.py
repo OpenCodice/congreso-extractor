@@ -142,11 +142,31 @@ def test_lista_incompleta_se_declara():
     from congreso import votaciones
     v = sil.votos(html("votos_nominales_sen_4820033.html"))
     d = sil.detalle_votacion(html("votacion_sen_4820033.html"))
-    assert votaciones.faltantes_en_lista(v, d, "4820033") == [{"grupo": "PAN", "option": "yes", "value": 1}]
+    assert votaciones.faltantes_en_lista(v, d) == ([{"grupo": "PAN", "option": "yes", "value": 1}], [])
 
 
 def test_lista_completa_sin_faltantes():
     from congreso import votaciones
     v = sil.votos(html("piloto_votos_nominales_dip_5135887.html"))
     d = sil.detalle_votacion(html("piloto_votacion_dip_5135887.html"))
-    assert votaciones.faltantes_en_lista(v, d, "5135887") == []
+    assert votaciones.faltantes_en_lista(v, d) == ([], [])
+
+
+def test_lista_con_votos_de_mas_se_publica_con_inconsistencias():
+    from congreso import votaciones
+    v = sil.votos(html("votos_nominales_sen_4820033.html"))
+    d = sil.detalle_votacion(html("votacion_sen_4820033.html"))
+    v += [dict(v[0], nombre="Nadie Ninguno", fuente_nombre="Sen. Nadie Ninguno", partido="PAN", opcion="no")]
+    faltan, inconsistencias = votaciones.faltantes_en_lista(v, d)
+    assert faltan == [{"grupo": "PAN", "option": "yes", "value": 1}]
+    assert inconsistencias == ["PAN no: 1 en la lista, 0 en el resumen"]
+
+
+def test_nombre_sin_mandato_se_declara_con_su_nombre():
+    from congreso import votaciones
+    v = sil.votos(html("votos_nominales_sen_4820033.html"))
+    indice = {("senado", votaciones.clave_nombre(x["nombre"])): [{"id": f"m{i}", "person_id": f"p{i}"}]
+              for i, x in enumerate(v[1:])}
+    salida, sin_ligar, inconsistencias = votaciones.atribuir(v, indice, {"senado"})
+    assert len(salida) == len(v) - 1 and inconsistencias == []
+    assert sin_ligar == [{"grupo": v[0]["partido"], "opcion": v[0]["opcion"], "nombre": v[0]["fuente_nombre"]}]

@@ -2,6 +2,7 @@
 
 - Toda referencia apunta a un registro que existe.
 - En una votación con votos publicados, los votos suman exactamente los conteos
+  (salvo que la fuente no cuadre consigo misma y lo declare `inconsistencias`)
   y nadie vota dos veces.
 - Cada dato cita al menos una fuente, y las copias guardadas coinciden con su
   huella.
@@ -52,8 +53,8 @@ def validar(raiz: Path) -> list[str]:
         d = f"votación {v['id']}"
         if v["organization_id"] not in orgs:
             errores.append(f"{d}: organización {v['organization_id']} no existe")
-        # Una votación del sitio del Senado puede no tener expediente en el SIL.
-        if v["expediente_id"] is None and not v["id"].startswith("senado-"):
+        # Una votación del Senado o de la Gaceta puede no tener par en el SIL.
+        if v["expediente_id"] is None and not v["id"].startswith(("senado-", "gaceta-")):
             errores.append(f"{d}: sin expediente")
         elif v["expediente_id"] is not None and v["expediente_id"] not in expedientes:
             errores.append(f"{d}: expediente {v['expediente_id']} no existe")
@@ -70,17 +71,23 @@ def validar(raiz: Path) -> list[str]:
         faltan = v.get("votos_faltantes", [])
         if any(f["value"] <= 0 for f in faltan):
             errores.append(f"{d}: votos_faltantes con valores no positivos")
+        if any(f.get("nombres_fuente") and len(f["nombres_fuente"]) != f["value"] for f in faltan):
+            errores.append(f"{d}: votos_faltantes con nombres que no suman su valor")
+        inconsistente = v.get("inconsistencias")
+        if inconsistente is not None and not (isinstance(inconsistente, list) and inconsistente
+                                              and all(isinstance(x, str) and x for x in inconsistente)):
+            errores.append(f"{d}: inconsistencias mal formadas")
         conteo = Counter(x["option"] for x in v["votes"])
         for f in faltan:
             conteo[f["option"]] += f["value"]
-        if +conteo != +Counter({c["option"]: c["value"] for c in v["counts"]}):
+        if not inconsistente and +conteo != +Counter({c["option"]: c["value"] for c in v["counts"]}):
             errores.append(f"{d}: los votos {dict(conteo)} no suman los conteos {v['counts']}")
         por_grupo = Counter(x["grupo_fuente"] for x in v["votes"])
         for f in faltan:
             por_grupo[f["grupo"]] += f["value"]
         for g in v.get("group_results", []):
             total = g["total"] if "total" in g else sum(g.get(o, 0) for o in OPCIONES)
-            if por_grupo[g["grupo"]] != total:
+            if not inconsistente and por_grupo[g["grupo"]] != total:
                 errores.append(f"{d}: grupo {g['grupo']} con {por_grupo[g['grupo']]} votos, el resumen dice {total}")
         for x in v["votes"]:
             if x["option"] not in OPCIONES:
@@ -108,6 +115,9 @@ def validar(raiz: Path) -> list[str]:
         for vid in e.get("votaciones", []):
             if vid not in votaciones:
                 errores.append(f"{d}: votación {vid} no existe")
+        for x in e.get("votaciones_economicas", []):
+            if not x.get("asunto") or x.get("camara") not in ("diputados", "senado", "permanente", None):
+                errores.append(f"{d}: votación económica mal formada {x}")
         fuentes(e, d)
 
     ligados = Counter()

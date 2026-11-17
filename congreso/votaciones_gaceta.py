@@ -10,13 +10,13 @@ from collections import Counter
 from pathlib import Path
 
 from . import cotejo, datos, gaceta, red
-from .cotejo import Omitida
 from .texto import romano
 from .votaciones_senado import escribir
 
 
 def evento(leg: str, v: dict, filas: list[dict], idx, fuentes: list[dict]) -> dict:
     lista = Counter((f["grupo"], f["opcion"]) for f in filas)
+    inconsistencias = []
     for g, conteos in v["conteos"].items():
         for o, n in conteos.items():
             if g == "Total":
@@ -24,8 +24,8 @@ def evento(leg: str, v: dict, filas: list[dict], idx, fuentes: list[dict]) -> di
             else:
                 listados = lista[(g, o)]
             if listados != n:
-                raise Omitida(f"gaceta {v['clave']}: {g} {o} = {listados} en la lista, {n} en la tabla")
-    votos, sin_mandato = cotejo.votos(filas, idx, f"gaceta {v['clave']}")
+                inconsistencias.append(f"{g} {o}: {listados} en la lista, {n} en la tabla")
+    votos, sin_mandato, otras = cotejo.votos(filas, idx)
     total = v["conteos"]["Total"]
     return {
         "id": f"gaceta-{v['clave']}",
@@ -44,6 +44,7 @@ def evento(leg: str, v: dict, filas: list[dict], idx, fuentes: list[dict]) -> di
         "group_results": [dict(grupo=g, **c) for g, c in v["conteos"].items() if g != "Total"],
         "sources": fuentes,
         **({"votos_faltantes": cotejo.faltantes(sin_mandato)} if sin_mandato else {}),
+        **({"inconsistencias": inconsistencias + otras} if inconsistencias + otras else {}),
     }
 
 
@@ -57,6 +58,8 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     for url in urls:
         rp = red.obtener(url)
         votaciones += gaceta.periodo(gaceta.decodificar(rp.contenido))
+    # El índice y todos los periodos se leyeron: es todo lo que la Gaceta publica hoy.
+    vigentes = None if solo else {f"gaceta-{x['tabla'].removeprefix('tabla')}" for x in votaciones}
     if solo:
         votaciones = [x for x in votaciones if x["tabla"] in solo]
     eventos_sil = [e for e in datos.todos(raiz, f"votaciones/{leg}/diputados") if e["id"].startswith("sil-")]
@@ -80,4 +83,4 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
 
     enlaces = cotejo.emparejar([v for v, _, _ in leidas], eventos_sil, "la votación de la Gaceta")
     return escribir(raiz, leg, "diputados", leidas, enlaces, eventos_sil, evento, errores,
-                    {"indice": ri.procedencia()})
+                    {"indice": ri.procedencia()}, "gaceta-", vigentes)

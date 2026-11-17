@@ -80,7 +80,12 @@ desde México.
 
 ## Reglas
 
-- Fidelidad: un dato sale de una fuente oficial y cita su URL y huella. Ante
-  la duda (un voto sin mandato, dos decretos indistinguibles), no se publica o
-  queda como candidato; nunca se adivina.
+- Fidelidad: un dato sale de una fuente oficial y cita su URL y huella. Lo
+  dudoso nunca se atribuye ni se adivina (un voto sin mandato único queda con
+  el nombre de la fuente en `votos_faltantes`; dos decretos indistinguibles,
+  como candidatos), pero lo que la fuente publica sí se registra: una votación
+  que no cuadra consigo misma se publica con `inconsistencias`, sin ajustar
+  sus conteos. Ensuciar o retirar una fuente no debe bastar para sacar algo
+  del registro: solo se omite lo que no se pudo leer, y nada se borra (lo que
+  la fuente retira queda con `retirada_de_la_fuente`).
 - Un cambio a un parser lleva su prueba con un fixture real en `tests/fixtures/`.

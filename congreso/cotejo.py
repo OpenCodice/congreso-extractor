@@ -20,8 +20,6 @@ from .decretos import _palabras
 
 UMBRAL = 0.7
 MARGEN = 0.15
-# Más nombres sin ligar que esto apunta a un problema de lectura, no de escritura.
-MAX_SIN_MANDATO = 3
 
 
 class Omitida(RuntimeError):
@@ -74,25 +72,29 @@ def faltantes(sin_mandato: list[dict]) -> list[dict]:
     return [{"grupo": g, "option": o, "value": len(n), "nombres_fuente": n} for (g, o), n in sorted(grupos.items())]
 
 
-def votos(filas: list[dict], indice, contexto: str, extra=lambda f: {}) -> tuple[list[dict], list[dict]]:
-    """Filas de la fuente → votos Popolo ligados a su mandato, y los que no se ligan."""
-    salida, sin_mandato = [], []
+def votos(filas: list[dict], indice, extra=lambda f: {}) -> tuple[list[dict], list[dict], list[str]]:
+    """Filas de la fuente → votos Popolo ligados a su mandato, las filas que no
+    se ligan (se declaran con su nombre en `votos_faltantes`) e inconsistencias."""
+    ligadas, sin_mandato = [], []
     for f in filas:
         r = indice.buscar(f["nombre"])
         if r is None:
             sin_mandato.append(f)
+        else:
+            ligadas.append((f, *r))
+    # Dos filas que dan con la misma persona: ninguna se le atribuye.
+    veces = Counter(m["person_id"] for _, m, _ in ligadas)
+    inconsistencias = [f"{n} filas ({', '.join(f['nombre'] for f, m, _ in ligadas if m['person_id'] == p)}) "
+                       f"se ligan a la misma persona {p}; no se atribuyen" for p, n in veces.items() if n > 1]
+    salida = []
+    for f, m, criterio in ligadas:
+        if veces[m["person_id"]] > 1:
+            sin_mandato.append(f)
             continue
-        m, criterio = r
         salida.append({"voter_id": m["person_id"], "mandato_id": m["id"], "option": f["opcion"],
                        "group_id": catalogos.partido(f["grupo"]), "grupo_fuente": f["grupo"], **extra(f),
                        **({"enlace": criterio} if criterio != "nombre" else {})})
-    if len(sin_mandato) > MAX_SIN_MANDATO:
-        raise Omitida(f"{contexto}: {len(sin_mandato)} legisladores sin mandato único "
-                      f"{[f['nombre'] for f in sin_mandato[:5]]}")
-    repetidos = [k for k, n in Counter(v["voter_id"] for v in salida).items() if n > 1]
-    if repetidos:
-        raise Omitida(f"{contexto}: dos filas ligadas a la misma persona {repetidos[:5]}")
-    return salida, sin_mandato
+    return salida, sin_mandato, inconsistencias
 
 
 def cotejar(e: dict, par: dict) -> None:

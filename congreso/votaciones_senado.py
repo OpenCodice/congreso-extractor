@@ -21,9 +21,9 @@ def indice(raiz: Path, leg: str, camara: str) -> nombres.Indice:
 
 def evento(leg: str, v: dict, filas: list[dict], idx: nombres.Indice, fuentes: list[dict]) -> dict:
     conteo = Counter(f["opcion"] for f in filas)
-    if any(conteo[k] != v["conteos"][k] for k in ("yes", "no", "abstain")):
-        raise Omitida(f"senado {v['clave']}: la tabla {dict(conteo)} no suma los conteos {v['conteos']}")
-    votos, sin_mandato = cotejo.votos(filas, idx, f"senado {v['clave']}", lambda f: {"senado_id": f["senado_id"]})
+    inconsistencias = [f"{k}: {conteo[k]} en la tabla nominal, {v['conteos'][k]} en el conteo de la votación"
+                       for k in ("yes", "no", "abstain") if conteo[k] != v["conteos"][k]]
+    votos, sin_mandato, otras = cotejo.votos(filas, idx, lambda f: {"senado_id": f["senado_id"]})
     return {
         "id": f"senado-{v['clave']}",
         "organization_id": "senado",
@@ -41,6 +41,7 @@ def evento(leg: str, v: dict, filas: list[dict], idx: nombres.Indice, fuentes: l
         "votes": votos,
         "sources": fuentes,
         **({"votos_faltantes": cotejo.faltantes(sin_mandato)} if sin_mandato else {}),
+        **({"inconsistencias": inconsistencias + otras} if inconsistencias + otras else {}),
     }
 
 
@@ -50,6 +51,7 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     listado = senado.listado(senado.decodificar(rl.contenido))
     if not listado:
         raise RuntimeError("el listado de votaciones del Senado está vacío")
+    vigentes = None if solo else {f"senado-{x['clave']}" for x in listado}
     if solo:
         listado = [x for x in listado if x["clave"] in solo]
     eventos_sil = [e for e in datos.todos(raiz, f"votaciones/{leg}/senado") if e["id"].startswith("sil-")]
@@ -67,11 +69,13 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
 
     enlaces = cotejo.emparejar([v for v, _, _ in leidas], eventos_sil, "la votación del Senado")
     return escribir(raiz, leg, "senado", leidas, enlaces, eventos_sil, evento, errores,
-                    {"listado": rl.procedencia()})
+                    {"listado": rl.procedencia()}, "senado-", vigentes)
 
 
 def escribir(raiz: Path, leg: str, camara: str, leidas, enlaces, eventos_sil, hacer_evento, errores,
-             extra: dict) -> dict:
+             extra: dict, prefijo: str, vigentes: set[str] | None) -> dict:
+    """Escribe los eventos leídos; con `vigentes` (todo lo que la fuente lista
+    hoy), marca como retirado lo publicado antes que ya no aparece."""
     sil_por_id = {e["id"]: e for e in eventos_sil}
     escritas = ligadas = 0
     for v, filas, respuestas in leidas:
@@ -92,7 +96,12 @@ def escribir(raiz: Path, leg: str, camara: str, leidas, enlaces, eventos_sil, ha
             datos.guardar_fuente(raiz, sha, contenido)
         datos.escribir(raiz, f"votaciones/{leg}/{camara}/{e['id']}.json", e)
         escritas += 1
-    return {"votaciones": escritas, "ligadas": ligadas,
+    retiradas = 0
+    if vigentes is not None:
+        for ruta in sorted((raiz / "votaciones" / leg / camara).glob(f"{prefijo}*.json")):
+            if ruta.stem not in vigentes:
+                retiradas += datos.marcar_retirada(raiz, ruta.relative_to(raiz).as_posix())
+    return {"votaciones": escritas, "ligadas": ligadas, "retiradas_de_la_fuente": retiradas,
             "con_par_sil": sum(1 for x in enlaces.values() if "votacion_sil" in x),
             "omitidas": len(errores), "errores": errores, **extra}
 

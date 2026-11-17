@@ -10,16 +10,21 @@ Por cada expediente con dictámenes votados que lista el buscador del SIL:
 
 Los votos se ligan al mandato por nombre, dentro de la cámara que indica el
 prefijo ("Dip."/"Sen.") y de la legislatura. Un nombre que no se encuentra, o
-que se encuentra dos veces, deja fuera el expediente completo: un voto mal
-atribuido es peor que uno faltante. Un expediente se escribe completo o no se
-escribe.
+que se encuentra dos veces, no se atribuye a nadie: queda en `votos_faltantes`
+tal como lo escribe la fuente. Lo que no cuadra (una lista que no suma su
+resumen) se publica igual, con la diferencia en `inconsistencias`: ensuciar la
+fuente no debe bastar para sacar una votación del registro. Solo se omite lo
+que no se pudo leer.
+
+Nada se borra: una votación o un expediente que el SIL deja de reportar se
+conserva con `retirada_de_la_fuente`.
 """
 from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
 
-from . import catalogos, datos, red, sil
+from . import catalogos, cotejo, datos, red, sil
 from .texto import clave_nombre, romano
 
 _CAMARA = {"Cámara de Diputados": "diputados", "Cámara de Senadores": "senado",
@@ -27,7 +32,7 @@ _CAMARA = {"Cámara de Diputados": "diputados", "Cámara de Senadores": "senado"
 
 
 class Omitido(RuntimeError):
-    """El asunto no se publica: algo no cuadra con la certeza que se exige."""
+    """El asunto no se publica: la fuente no se pudo leer."""
 
 
 def indice_mandatos(raiz: Path, leg: str) -> dict[tuple[str, str], list[dict]]:
@@ -55,16 +60,18 @@ def _procedencia(r: red.Respuesta) -> tuple[dict, tuple[str, bytes]]:
     return p, (r.sha256, r.contenido)
 
 
-def atribuir(votos: list[dict], indice: dict, camaras: set[str], contexto: str) -> list[dict]:
-    salida, faltan, dobles = [], [], []
+def atribuir(votos: list[dict], indice: dict, camaras: set[str]) -> tuple[list[dict], list[dict], list[str]]:
+    """Votos ligados a un único mandato, filas sin ligar (para `votos_faltantes`) e inconsistencias."""
+    salida, sin_ligar, inconsistencias = [], [], []
     for v in votos:
+        fila = {"grupo": v["partido"], "opcion": v["opcion"], "nombre": v["fuente_nombre"]}
         if v["camara"] not in camaras:
-            raise Omitido(f"{contexto}: votante de {v['camara']} en una votación de {sorted(camaras)}")
+            sin_ligar.append(fila)
+            inconsistencias.append(f"{v['fuente_nombre']}: votante de {v['camara']} en una votación de {sorted(camaras)}")
+            continue
         candidatos = indice.get((v["camara"], clave_nombre(v["nombre"])), [])
-        if not candidatos:
-            faltan.append(v["fuente_nombre"])
-        elif len(candidatos) > 1:
-            dobles.append(v["fuente_nombre"])
+        if len(candidatos) != 1:
+            sin_ligar.append(fila)
         else:
             m = candidatos[0]
             salida.append({
@@ -74,46 +81,44 @@ def atribuir(votos: list[dict], indice: dict, camaras: set[str], contexto: str) 
                 "group_id": catalogos.partido(v["partido"]),
                 "grupo_fuente": v["partido"],
             })
-    if faltan or dobles:
-        raise Omitido(f"{contexto}: sin mandato {faltan[:5]} ({len(faltan)}); ambiguos {dobles[:5]}")
-    return salida
+    return salida, sin_ligar, inconsistencias
 
 
 OPCIONES = ("yes", "no", "abstain", "absent")
 
 
-def faltantes_en_lista(votos: list[dict], detalle: dict, contexto: str) -> list[dict]:
-    """Lo que el resumen por grupo cuenta y la lista nominal no trae.
+def faltantes_en_lista(votos: list[dict], detalle: dict) -> tuple[list[dict], list[str]]:
+    """Lo que el resumen por grupo cuenta y la lista nominal no trae, y lo que no cuadra.
 
     El SIL a veces deja fuera de la lista a un legislador que su propio resumen
-    sí cuenta. Cada voto listado sigue siendo oficial, así que la lista se
-    publica si es un subconjunto del resumen y lo que falta queda declarado. Un
-    voto de más, un grupo que el resumen no conoce o un resumen que no suma no
-    tienen explicación: el asunto se omite.
+    sí cuenta: lo que falta queda declarado. Un voto de más, un grupo que el
+    resumen no conoce o un resumen que no suma no tienen explicación: se
+    anotan como inconsistencias y la votación se publica tal como viene.
     """
     grupos = [g for g in detalle["grupos"] if g["grupo"] != "Total"]
     if not grupos:
-        raise Omitido(f"{contexto}: sin resumen por grupo")
+        return [], ["la votación no trae resumen por grupo"]
+    inconsistencias = []
     lista = Counter((v["partido"], v["opcion"]) for v in votos)
     ajenos = {p for p, _ in lista} - {g["grupo"] for g in grupos}
     if ajenos:
-        raise Omitido(f"{contexto}: grupos {sorted(ajenos)} en la lista y no en el resumen")
+        inconsistencias.append(f"grupos {sorted(ajenos)} en la lista y no en el resumen")
     general = detalle["general"]
     for k in ("yes", "no", "abstain"):
         if sum(g[k] for g in grupos) != general[k]:
-            raise Omitido(f"{contexto}: los grupos no suman {k} = {general[k]}")
+            inconsistencias.append(f"los grupos suman {k} = {sum(g[k] for g in grupos)}; el conteo general, {general[k]}")
     total = next((g for g in detalle["grupos"] if g["grupo"] == "Total"), None)
     if total and any(sum(g[k] for g in grupos) != total[k] for k in OPCIONES):
-        raise Omitido(f"{contexto}: los grupos no suman la fila Total")
+        inconsistencias.append("los grupos no suman la fila Total")
     faltan = []
     for g in grupos:
         for k in OPCIONES:
             dif = g[k] - lista[(g["grupo"], k)]
             if dif < 0:
-                raise Omitido(f"{contexto}: {g['grupo']} {k} = {lista[(g['grupo'], k)]} en la lista, {g[k]} en el resumen")
-            if dif:
+                inconsistencias.append(f"{g['grupo']} {k}: {lista[(g['grupo'], k)]} en la lista, {g[k]} en el resumen")
+            elif dif:
                 faltan.append({"grupo": g["grupo"], "option": k, "value": dif})
-    return faltan
+    return faltan, inconsistencias
 
 
 def eventos_de_asunto(leg: str, fila: dict, indice: dict) -> tuple[list[dict], list[tuple[str, bytes]], list[dict]]:
@@ -175,8 +180,11 @@ def eventos_de_asunto(leg: str, fila: dict, indice: dict) -> tuple[list[dict], l
         if con_votos == i - 1:
             rv = red.obtener(sil.url_votos(asunto, detalle["tramite"]))
             votos = sil.votos(sil.decodificar(rv.contenido))
-            faltan = faltantes_en_lista(votos, detalle, f"asunto {asunto}")
-            evento["votes"] = atribuir(votos, indice, camaras, f"asunto {asunto}")
+            faltan, inconsistencias = faltantes_en_lista(votos, detalle)
+            evento["votes"], sin_ligar, otras = atribuir(votos, indice, camaras)
+            faltan += cotejo.faltantes(sin_ligar)
+            if inconsistencias + otras:
+                evento["inconsistencias"] = inconsistencias + otras
             evento["votos_publicados"] = True
             evento["tramite"] = detalle["tramite"]
             ausentes = sum(g["absent"] for g in detalle["grupos"] if g["grupo"] != "Total")
@@ -190,6 +198,14 @@ def eventos_de_asunto(leg: str, fila: dict, indice: dict) -> tuple[list[dict], l
                 copias.append(c)
         eventos.append(evento)
     return eventos, copias, tramites
+
+
+def economicas(fila: dict, tramites: list[dict]) -> list[dict]:
+    """Las votaciones económicas de un dictamen: se decidieron sin registro de
+    quién votó qué. Se listan para que esa ausencia quede a la vista."""
+    return [{"asunto": fila["clave"], "camara": _CAMARA.get(fila["camara"] or ""), "fecha": fila["fecha"],
+             "texto": t["texto"], "result": _resultado(t["texto"])}
+            for t in tramites if t["tipo"] == "Votación económica"]
 
 
 def expediente(seguimiento: str, fila: dict) -> tuple[dict, list[tuple[str, bytes]]]:
@@ -213,6 +229,7 @@ def expediente(seguimiento: str, fila: dict) -> tuple[dict, list[tuple[str, byte
         "cronologia": seg["cronologia"],
         "asuntos": asuntos,
         "votaciones": [],
+        "votaciones_economicas": [],
         "tramites": {},
         "sources": [ps, ph],
     }, [cs, ch]
@@ -249,6 +266,7 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
                 eventos += ev
                 copias += cp
                 exp["tramites"][f["clave"]] = tr
+                exp["votaciones_economicas"] += economicas(f, tr)
         except (Omitido, ValueError, KeyError) as e:
             errores.append(f"expediente {seg}: {e}")
             continue
@@ -256,13 +274,30 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
         for sha, contenido in copias:
             datos.guardar_fuente(raiz, sha, contenido)
         for f in dictamenes:
-            # Una votación que el SIL ya no reporta no se queda con datos viejos.
+            # Una votación que el SIL ya no reporta se conserva, marcada.
             for viejo in (raiz / "votaciones" / leg).glob(f"*/sil-{f['clave']}-*.json"):
                 if viejo.stem not in exp["votaciones"]:
-                    viejo.unlink()
+                    datos.marcar_retirada(raiz, viejo.relative_to(raiz).as_posix())
         for e in eventos:
             datos.escribir(raiz, f"votaciones/{leg}/{e['camara']}/{e['id']}.json", e)
             escritos += 1
         datos.escribir(raiz, f"expedientes/sil-{seg}.json", exp)
-    return {"expedientes": len(por_seguimiento) - len(errores), "votaciones": escritos,
+    retiradas = 0
+    if not solo:
+        # El buscador lista todos los expedientes votados: el que ya no aparece
+        # fue retirado de la fuente.
+        ausentes = []
+        for e in datos.todos(raiz, "expedientes"):
+            rutas = [r for vid in e["votaciones"] for r in (raiz / "votaciones" / leg).glob(f"*/{vid}.json")]
+            if rutas and e["seguimiento"] not in por_seguimiento:
+                ausentes.append((e, rutas))
+        # Muchos de golpe apuntan a una búsqueda incompleta, no a retiros.
+        if len(ausentes) > max(5, len(por_seguimiento) // 10):
+            errores.append(f"{len(ausentes)} expedientes publicados no aparecen en la búsqueda; no se marcan como retirados")
+        else:
+            for e, rutas in ausentes:
+                retiradas += datos.marcar_retirada(raiz, f"expedientes/{e['id']}.json")
+                for r in rutas:
+                    datos.marcar_retirada(raiz, r.relative_to(raiz).as_posix())
+    return {"retirados_de_la_fuente": retiradas,"expedientes": len(por_seguimiento) - len(errores), "votaciones": escritos,
             "omitidos": len(errores), "errores": errores, "busqueda": r.procedencia()}
