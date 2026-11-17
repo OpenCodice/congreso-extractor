@@ -1,0 +1,218 @@
+{
+  "fecha": "2026-11-17T11:26:17+00:00",
+  "resoluciones": [
+    {
+      "candidatos": [
+        "sil-4774909",
+        "sil-4784645",
+        "sil-4818791",
+        "sil-4979680",
+        "sil-5037474"
+      ],
+      "decreto": "dof-5744206",
+      "estado": "confirmada",
+      "fuente_dof": {
+        "consultado": "2026-11-17T11:24:45Z",
+        "sha256": "4406c93bae114291d7954f792217ce104986ac8fd61aed730b06233be5ee60f7",
+        "url": "https://sidof.segob.gob.mx/dof/sidof/notas/nota/5744206"
+      },
+      "huella": "1e0f8de6b3e7e491",
+      "juicio": {
+        "nota": "Reforma constitucional art. 123 A XII (vivienda). El decreto reforma párrafos primero y segundo y adiciona segundo, cuarto y quinto: idéntico a la denominación de sil-4784645. Cronología: Senado aprobó 31/10/2024, congresos locales 06/11 y 26/11, turnado al Ejecutivo 26/11 (el decreto lleva fecha de Congreso 26/11/2024), publicado 02/12/2024. El otro candidato sobre art. 123 (4774909, salarios) es una reforma distinta y no está publicado.",
+        "veredicto": "confirmado"
+      },
+      "propuesta": {
+        "citas": [
+          {
+            "fuente": "dof",
+            "texto": "reforma y adiciona la fracción XII del Apartado A del artículo 123 de la Constitución Política de los Estados Unidos Mexicanos, en materia de vivienda para las personas trabajadoras"
+          },
+          {
+            "fuente": "expediente",
+            "texto": "Con proyecto de decreto que reforma y adiciona la fracción XII del Apartado A del artículo 123 de la Constitución Política de los Estados Unidos Mexicanos, en materia de vivienda para las personas trabajadoras"
+          }
+        ],
+        "expediente": "sil-4784645",
+        "nota": "Mismo artículo 123, Apartado A, fracción XII, en materia de vivienda; el SIL lo registra publicado el 02/12/2024, igual que el DOF. Los otros candidatos (salarios, lenguaje inclusivo, renuncia, electoral) son de otra materia."
+      }
+    },
+    {
+      "candidatos": [
+        "sil-4868955"
+      ],
+      "decreto": "dof-5755218",
+      "estado": "confirmada",
+      "fuente_dof": {
+        "consultado": "2026-11-17T11:24:50Z",
+        "sha256": "8d7ce1d1fdd5e816c9b1313b94315e33b4848d47d7457c8c7d9bbba796468284",
+        "url": "https://sidof.segob.gob.mx/dof/sidof/notas/nota/5755218"
+      },
+      "huella": "e3abaf17f7236924",
+      "juicio": {
+        "nota": "Ley de Obras Públicas; reforma, adiciona y deroga. El decreto lleva fecha de Congreso 10/04/2025, igual que la aprobación en pleno de la revisora (10/04/2025) en sil-4868955; origen aprobó 01/04; publicado 16/04/2025, igual que el decreto. Es el único candidato.",
+        "veredicto": "confirmado"
+      },
+      "propuesta": {
+        "citas": [
+          {
+            "fuente": "dof",
+            "texto": "SE REFORMAN, ADICIONAN Y DEROGAN DIVERSAS DISPOSICIONES DE LA LEY DE OBRAS PÚBLICAS Y SERVICIOS RELACIONADOS CON LAS MISMAS"
+          },
+          {
+            "fuente": "expediente",
+            "texto": "Que reforma, adiciona y deroga diversas disposiciones de la Ley de Obras Públicas y Servicios Relacionados con las Mismas"
+          }
+        ],
+        "expediente": "sil-4868955",
+        "nota": "Única candidata; misma ley y mismo tipo de reforma; el SIL registra publicación en DOF el 16/04/2025, igual que el decreto (aprobado 10/04/2025)."
+      }
+    },
+    {
+      "candidatos": [
+        "sil-4417148",
+        "sil-5147520"
+      ],
+      "decreto": "dof-5763163",
+      "estado": "confirmada",
+      "fuente_dof": {
+        "consultado": "2026-11-17T11:24:53Z",
+        "sha256": "9a62b5090c4e280d8c712de0de2f421cadd55ca78e6f854baf3ae05022ac110b",
+        "url": "https://sidof.segob.gob.mx/dof/sidof/notas/nota/5763163"
+      },
+      "huella": "fe699087b11cc2ca",
+      "juicio": {
+        "nota": "El expediente sil-4417148 empezó con una minuta sobre el art. 60 Bis, pero el Senado la modificó (reserva de Ortiz Domínguez sobre 47 Bis 4, 60 Bis, 122, 127 y transitorios) y la devolvió a origen; la minuta final 4908690 se titula 'reforma los artículos 47 Bis 4; 60 Bis; 122 y 127', idéntico al decreto. Origen aceptó el 25/06/2025 (decreto firmado por el Congreso el 25/06/2025); publicado 16/07/2025. El otro candidato (5147520) está pendiente.",
+        "veredicto": "confirmado"
+      },
+      "propuesta": {
+        "citas": [
+          {
+            "fuente": "dof",
+            "texto": "SE REFORMAN Y ADICIONAN LOS ARTÍCULOS 47 BIS 4; 60 BIS; 122 Y 127 DE LA LEY GENERAL DE VIDA SILVESTRE"
+          },
+          {
+            "fuente": "expediente",
+            "texto": "Que reforma los artículos 47 Bis 4; 60 Bis; 122 y 127 de la Ley General de Vida Silvestre"
+          }
+        ],
+        "expediente": "sil-4417148",
+        "nota": "Mismos artículos (47 Bis 4, 60 Bis, 122, 127): el expediente contiene la modificación del Senado a la minuta con esos artículos; SIL registra publicación el 16/07/2025, igual al DOF. El otro candidato es una ley general de bienestar animal pendiente en comisión."
+      }
+    },
+    {
+      "candidatos": [
+        "sil-4987180",
+        "sil-5028052",
+        "sil-5154789"
+      ],
+      "decreto": "dof-5775999",
+      "estado": "sin_expediente",
+      "fuente_dof": {
+        "consultado": "2026-11-17T11:24:57Z",
+        "sha256": "d663bf49121bc13b6a164652721111b734150491ff5d29d582fef94a17290177",
+        "url": "https://sidof.segob.gob.mx/dof/sidof/notas/nota/5775999"
+      },
+      "huella": "661d660baf64b195",
+      "motivo": "el agente no encontró el expediente entre los candidatos",
+      "propuesta": {
+        "citas": [],
+        "expediente": null,
+        "nota": "Ningún candidato encaja: todos están pendientes en comisión y tratan otras materias/artículos; ninguno tiene aprobación de ambas cámaras ni publicación."
+      }
+    },
+    {
+      "candidatos": [
+        "sil-4937807",
+        "sil-4937808",
+        "sil-4972426",
+        "sil-5017046",
+        "sil-5147520",
+        "sil-5187426"
+      ],
+      "decreto": "dof-5776439",
+      "estado": "sin_expediente",
+      "fuente_dof": {
+        "consultado": "2026-11-17T11:25:00Z",
+        "sha256": "b3efb3710417d2b33308ec329b85dda73635a8b11f6a761d88fa84a09ba2a44b",
+        "url": "https://sidof.segob.gob.mx/dof/sidof/notas/nota/5776439"
+      },
+      "huella": "8c96ec42652261b1",
+      "motivo": "el agente no encontró el expediente entre los candidatos",
+      "propuesta": {
+        "citas": [],
+        "expediente": null,
+        "nota": "Ningún candidato encaja: todos están pendientes en comisión y tratan otras materias/artículos; ninguno tiene aprobación de ambas cámaras ni publicación."
+      }
+    },
+    {
+      "candidatos": [
+        "sil-4937783",
+        "sil-4972452",
+        "sil-4983319",
+        "sil-4983320",
+        "sil-4994876",
+        "sil-5071818",
+        "sil-5071823"
+      ],
+      "decreto": "dof-5778298",
+      "estado": "rechazada",
+      "fuente_dof": {
+        "consultado": "2026-11-17T11:25:04Z",
+        "sha256": "eeda07fdea0032cdc9d1eeb9f34eee1c33dfe77354e18fed19d2f209eedc2bd9",
+        "url": "https://sidof.segob.gob.mx/dof/sidof/notas/nota/5778298"
+      },
+      "huella": "eab9d2cae31eb1b7",
+      "juicio": {
+        "nota": "El texto del DOF no está disponible (solo dice 'es necesario descargar el archivo'), así que no se pudo comparar ningún artículo ni reforma con el expediente. Solo coinciden el título genérico (reforma, adiciona y deroga Ley General de Salud) y la fecha de publicación 15/01/2026; sil-4994876 es verosímil (aprobado por ambas cámaras el 10/12/2025, los demás candidatos pendientes), pero sin contenido no se puede afirmar 'sin duda' que sea el mismo, y podría haber otro decreto de Salud no considerado. Se rechaza por duda.",
+        "veredicto": "rechazado"
+      },
+      "motivo": "el segundo agente no la confirmó",
+      "propuesta": {
+        "citas": [
+          {
+            "fuente": "dof",
+            "texto": "DECRETO por el que se reforman, adicionan y derogan diversas disposiciones de la Ley General de Salud"
+          },
+          {
+            "fuente": "expediente",
+            "texto": "Que reforma, adiciona y deroga diversas disposiciones de la Ley General de Salud en materia de prohibición de cigarrillos electrónicos"
+          }
+        ],
+        "expediente": "sil-4994876",
+        "nota": "Mismo tipo de reforma a la Ley General de Salud; SIL registra publicación el 15/01/2026, igual al DOF. Los demás candidatos siguen pendientes en comisión de revisora. Salvedad: el texto del DOF no está disponible (solo el título), así que la coincidencia descansa en título y fecha."
+      }
+    },
+    {
+      "candidatos": [
+        "sil-4937801",
+        "sil-5071820"
+      ],
+      "decreto": "dof-5787417",
+      "estado": "confirmada",
+      "fuente_dof": {
+        "consultado": "2026-11-17T11:25:07Z",
+        "sha256": "756039e1f9820d6aabf37dc67d42569418fe92369d4d78afa3a630c730643f02",
+        "url": "https://sidof.segob.gob.mx/dof/sidof/notas/nota/5787417"
+      },
+      "huella": "07cd4d8f25b117c2",
+      "juicio": {
+        "nota": "El decreto reforma la LFRCF y la LGCG (sin Ley de Coordinación Fiscal). La iniciativa/dictamen de origen incluían Coordinación Fiscal, pero la minuta 5072236 y el dictamen final 5074660 del expediente sil-5071820 mencionan solo esas dos leyes, igual que el decreto. Senado aprobó 21/04/2026, y el decreto lleva fecha del Congreso 21/04/2026; publicado 14/05/2026 (el SIL registra 14 y 15/05). El otro candidato (4937801) solo adiciona y está pendiente.",
+        "veredicto": "confirmado"
+      },
+      "propuesta": {
+        "citas": [
+          {
+            "fuente": "dof",
+            "texto": "SE REFORMAN, ADICIONAN Y DEROGAN DIVERSAS DISPOSICIONES DE LA LEY DE FISCALIZACIÓN Y RENDICIÓN DE CUENTAS DE LA FEDERACIÓN Y DE LA LEY GENERAL DE CONTABILIDAD GUBERNAMENTAL"
+          },
+          {
+            "fuente": "expediente",
+            "texto": "Que reforma, adiciona y deroga diversas disposiciones de Ley de Fiscalización y Rendición de Cuentas de la Federación, de la Ley General de Contabilidad Gubernamental"
+          }
+        ],
+        "expediente": "sil-5071820",
+        "nota": "Mismas dos leyes (el expediente añade Coordinación Fiscal); aprobado por el Congreso el 21/04/2026 (dictamen 15/04); el SIL registra la publicación un día después (15/05 vs 14/05). El otro candidato está pendiente en comisión."
+      }
+    }
+  ]
+}
