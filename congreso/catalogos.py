@@ -83,8 +83,11 @@ PARTIDOS = {
     "PRD": ("prd", "Partido de la Revolución Democrática"),
     "PES": ("pes", "Partido Encuentro Social"),
     "PES.": ("pes", "Partido Encuentro Social"),
+    # Como las escribe el sitio del Senado.
+    "MORENA": ("morena", "Morena"),
 }
-SIN_PARTIDO = {"Ind.", "Sin Partido", "SP", "-", ""}
+# "SG": sin grupo, en el sitio del Senado.
+SIN_PARTIDO = {"Ind.", "Sin Partido", "SP", "SG", "-", ""}
 
 
 def partido(etiqueta: str) -> str | None:

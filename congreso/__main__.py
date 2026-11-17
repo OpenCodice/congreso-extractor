@@ -2,6 +2,7 @@
 
     python -m congreso padron     --out ../congreso-mexicano --legislatura 66 --camara diputados
     python -m congreso votaciones --out ../congreso-mexicano --legislatura 66 [--asunto 5135887]
+    python -m congreso senado     --out ../congreso-mexicano --legislatura 66 [--votacion 5139]
     python -m congreso decretos   --out ../congreso-mexicano --repos ..
     python -m congreso validar    --out ../congreso-mexicano
 """
@@ -28,6 +29,11 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--legislatura", type=int, required=True)
     a.add_argument("--asunto", action="append")
 
+    a = sub.add_parser("senado", help="votaciones del sitio del Senado (solo desde México: EGRESS_MX_TOKEN)")
+    a.add_argument("--out", type=Path, required=True)
+    a.add_argument("--legislatura", type=int, required=True)
+    a.add_argument("--votacion", action="append")
+
     a = sub.add_parser("decretos")
     a.add_argument("--out", type=Path, required=True)
     a.add_argument("--repos", type=Path, required=True, help="carpeta con los repos de leyes")
@@ -42,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
     elif args.orden == "votaciones":
         from . import votaciones
         r = votaciones.construir(args.out, args.legislatura, set(args.asunto) if args.asunto else None)
+    elif args.orden == "senado":
+        from . import votaciones_senado
+        r = votaciones_senado.construir(args.out, args.legislatura, set(args.votacion) if args.votacion else None)
     elif args.orden == "decretos":
         from . import decretos
         r = decretos.construir(args.out, args.repos)

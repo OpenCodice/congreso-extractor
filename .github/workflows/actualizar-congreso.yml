@@ -20,7 +20,7 @@ concurrency:
 jobs:
   actualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 300
     env:
       LEG: ${{ inputs.legislatura || '66' }}
     steps:
@@ -46,6 +46,11 @@ jobs:
       - name: Votaciones y expedientes
         # Un expediente que no cuadra se anota y se omite; el resto se publica.
         run: python -m congreso votaciones --out ../repos/congreso-mexicano --legislatura "$LEG" > ../votaciones.json
+      - name: Votaciones del Senado
+        # Su sitio solo responde desde México; el token solo llega a este paso.
+        env:
+          EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
+        run: python -m congreso senado --out ../repos/congreso-mexicano --legislatura "$LEG" > ../senado.json
       - name: Decretos
         run: python -m congreso decretos --out ../repos/congreso-mexicano --repos ../repos > ../decretos.json
       - name: Validar (GATE)
@@ -67,9 +72,11 @@ jobs:
           python - <<'PY' > ../../cuerpo.md
           import json
           v = json.load(open("../../votaciones.json")); d = json.load(open("../../decretos.json"))
+          s = json.load(open("../../senado.json"))
           print(f"Expedientes: {v['expedientes']} · votaciones: {v['votaciones']} · omitidos: {v['omitidos']}")
+          print(f"Senado: {s['votaciones']} votaciones · ligadas a un expediente: {s['ligadas']} · con par en el SIL: {s['con_par_sil']} · omitidas: {s['omitidas']}")
           print(f"Decretos: {d['decretos']} · con expediente: {d['con_expediente']} · ambiguos: {d['ambiguos']} · sin decreto: {d['sin_decreto']}")
-          for e in (v["errores"] + d["avisos"])[:80]:
+          for e in (v["errores"] + s["errores"] + d["avisos"])[:80]:
               print(f"- {e[:300]}")
           PY
           gh label create verificado -R OpenCodice/congreso-mexicano --force >/dev/null

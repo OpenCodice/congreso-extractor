@@ -51,8 +51,13 @@ def validar(raiz: Path) -> list[str]:
         d = f"votación {v['id']}"
         if v["organization_id"] not in orgs:
             errores.append(f"{d}: organización {v['organization_id']} no existe")
-        if v["expediente_id"] not in expedientes:
+        # Una votación del sitio del Senado puede no tener expediente en el SIL.
+        if v["expediente_id"] is None and not v["id"].startswith("senado-"):
+            errores.append(f"{d}: sin expediente")
+        elif v["expediente_id"] is not None and v["expediente_id"] not in expedientes:
             errores.append(f"{d}: expediente {v['expediente_id']} no existe")
+        if v.get("votacion_sil") and v["votacion_sil"] not in votaciones:
+            errores.append(f"{d}: votacion_sil {v['votacion_sil']} no existe")
         fuentes(v, d)
         if not v["votos_publicados"]:
             if v["votes"]:
