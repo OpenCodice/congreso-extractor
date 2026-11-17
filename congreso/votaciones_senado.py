@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from . import cotejo, datos, nombres, red, senado
+from . import cotejo, datos, nombres, red, senado, validar
 from .cotejo import Omitida
 from .texto import romano
 
@@ -24,7 +24,7 @@ def evento(leg: str, v: dict, filas: list[dict], idx: nombres.Indice, fuentes: l
     inconsistencias = [f"{k}: {conteo[k]} en la tabla nominal, {v['conteos'][k]} en el conteo de la votación"
                        for k in ("yes", "no", "abstain") if conteo[k] != v["conteos"][k]]
     votos, sin_mandato, otras = cotejo.votos(filas, idx, lambda f: {"senado_id": f["senado_id"]})
-    return {
+    e = {
         "id": f"senado-{v['clave']}",
         "organization_id": "senado",
         "legislative_period_id": leg,
@@ -43,6 +43,8 @@ def evento(leg: str, v: dict, filas: list[dict], idx: nombres.Indice, fuentes: l
         **({"votos_faltantes": cotejo.faltantes(sin_mandato)} if sin_mandato else {}),
         **({"inconsistencias": list(dict.fromkeys(inconsistencias + otras))} if inconsistencias + otras else {}),
     }
+    validar.declarar_diferencias(e)
+    return e
 
 
 def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dict:

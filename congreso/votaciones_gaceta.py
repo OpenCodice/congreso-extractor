@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from . import cotejo, datos, gaceta, red
+from . import cotejo, datos, gaceta, red, validar
 from .texto import romano
 from .votaciones_senado import escribir
 
@@ -27,7 +27,7 @@ def evento(leg: str, v: dict, filas: list[dict], idx, fuentes: list[dict]) -> di
                 inconsistencias.append(f"{g} {o}: {listados} en la lista, {n} en la tabla")
     votos, sin_mandato, otras = cotejo.votos(filas, idx)
     total = v["conteos"]["Total"]
-    return {
+    e = {
         "id": f"gaceta-{v['clave']}",
         "organization_id": "camara-de-diputados",
         "legislative_period_id": leg,
@@ -46,6 +46,8 @@ def evento(leg: str, v: dict, filas: list[dict], idx, fuentes: list[dict]) -> di
         **({"votos_faltantes": cotejo.faltantes(sin_mandato)} if sin_mandato else {}),
         **({"inconsistencias": list(dict.fromkeys(inconsistencias + otras))} if inconsistencias + otras else {}),
     }
+    validar.declarar_diferencias(e)
+    return e
 
 
 def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dict:

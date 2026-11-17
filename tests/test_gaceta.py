@@ -66,6 +66,7 @@ def test_evento_con_lista_incompleta_se_publica_con_inconsistencias():
     e = evento("lxvi", _v("tabla3or1-3.html"), filas, _Indice(), [])
     assert len(e["votes"]) == 155 and "Total yes: 0 en la lista, 344 en la tabla" in e["inconsistencias"]
     assert e["counts"][0] == {"option": "yes", "value": 344}
+    assert e["diferencia_conteos"] == {"yes": -344}
 
 
 class _IndiceRepetido:

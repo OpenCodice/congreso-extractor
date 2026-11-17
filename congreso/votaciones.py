@@ -24,7 +24,7 @@ from __future__ import annotations
 from collections import Counter
 from pathlib import Path
 
-from . import catalogos, cotejo, datos, red, sil
+from . import catalogos, cotejo, datos, red, sil, validar
 from .texto import clave_nombre, romano
 
 _CAMARA = {"Cámara de Diputados": "diputados", "Cámara de Senadores": "senado",
@@ -204,6 +204,7 @@ def eventos_de_asunto(leg: str, fila: dict, indice: dict) -> tuple[list[dict], l
             if faltan:
                 evento["votos_faltantes"] = faltan
             evento["group_results"] = [g for g in detalle["grupos"] if g["grupo"] != "Total"]
+            validar.declarar_diferencias(evento)
             for r in (rd, rv):
                 p, c = _procedencia(r)
                 evento["sources"].append(p)

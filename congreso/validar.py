@@ -2,8 +2,9 @@
 
 - Toda referencia apunta a un registro que existe.
 - En una votación con votos publicados, los votos suman exactamente los conteos
-  (salvo que la fuente no cuadre consigo misma y lo declare `inconsistencias`)
-  y nadie vota dos veces.
+  y nadie vota dos veces. Si la fuente no cuadra consigo misma, la diferencia
+  exacta está declarada (`diferencia_conteos`, `diferencia_grupos`) y explicada
+  en `inconsistencias`.
 - Cada dato cita al menos una fuente, y las copias guardadas coinciden con su
   huella.
 """
@@ -23,6 +24,36 @@ OPCIONES = {"yes", "no", "abstain", "absent", "not voting"}
 def _contenido(ruta: Path) -> bytes:
     """Lo que se descargó: la huella es del original, no de la copia comprimida."""
     return gzip.decompress(ruta.read_bytes()) if ruta.suffix == ".gz" else ruta.read_bytes()
+
+
+def diferencias(v: dict) -> tuple[dict[str, int], dict[str, int]]:
+    """Votos listados (más los declarados en `votos_faltantes`) menos lo que
+    dicen los conteos de la votación, por opción y por grupo; solo lo distinto
+    de cero."""
+    listados = Counter(x["option"] for x in v["votes"])
+    por_grupo = Counter(x["grupo_fuente"] for x in v["votes"])
+    for f in v.get("votos_faltantes", []):
+        listados[f["option"]] += f["value"]
+        por_grupo[f["grupo"]] += f["value"]
+    conteos = Counter({c["option"]: c["value"] for c in v["counts"]})
+    por_opcion = {o: listados[o] - conteos[o] for o in sorted(set(listados) | set(conteos))
+                  if listados[o] != conteos[o]}
+    grupos = {}
+    for g in v.get("group_results", []):
+        total = g["total"] if "total" in g else sum(g.get(o, 0) for o in OPCIONES)
+        if por_grupo[g["grupo"]] != total:
+            grupos[g["grupo"]] = por_grupo[g["grupo"]] - total
+    return por_opcion, grupos
+
+
+def declarar_diferencias(v: dict) -> None:
+    """Anota en la votación lo que sus votos difieren de sus conteos (ver `diferencias`)."""
+    por_opcion, por_grupo = diferencias(v)
+    for campo, valor in (("diferencia_conteos", por_opcion), ("diferencia_grupos", por_grupo)):
+        if valor:
+            v[campo] = valor
+        else:
+            v.pop(campo, None)
 
 
 def validar(raiz: Path) -> list[str]:
@@ -83,18 +114,17 @@ def validar(raiz: Path) -> list[str]:
         if inconsistente is not None and not (isinstance(inconsistente, list) and inconsistente
                                               and all(isinstance(x, str) and x for x in inconsistente)):
             errores.append(f"{d}: inconsistencias mal formadas")
-        conteo = Counter(x["option"] for x in v["votes"])
-        for f in faltan:
-            conteo[f["option"]] += f["value"]
-        if not inconsistente and +conteo != +Counter({c["option"]: c["value"] for c in v["counts"]}):
-            errores.append(f"{d}: los votos {dict(conteo)} no suman los conteos {v['counts']}")
-        por_grupo = Counter(x["grupo_fuente"] for x in v["votes"])
-        for f in faltan:
-            por_grupo[f["grupo"]] += f["value"]
-        for g in v.get("group_results", []):
-            total = g["total"] if "total" in g else sum(g.get(o, 0) for o in OPCIONES)
-            if not inconsistente and por_grupo[g["grupo"]] != total:
-                errores.append(f"{d}: grupo {g['grupo']} con {por_grupo[g['grupo']]} votos, el resumen dice {total}")
+        # Si la fuente no cuadra consigo misma, la diferencia exacta va declarada:
+        # una nota cualquiera no basta para dejar de sumar.
+        por_opcion, por_grupo = diferencias(v)
+        if v.get("diferencia_conteos", {}) != por_opcion:
+            errores.append(f"{d}: los votos difieren de los conteos en {por_opcion}; "
+                           f"declarado {v.get('diferencia_conteos', {})}")
+        if v.get("diferencia_grupos", {}) != por_grupo:
+            errores.append(f"{d}: los votos difieren del resumen por grupo en {por_grupo}; "
+                           f"declarado {v.get('diferencia_grupos', {})}")
+        if (por_opcion or por_grupo) and not inconsistente:
+            errores.append(f"{d}: los votos no cuadran y no dice por qué en inconsistencias")
         for x in v["votes"]:
             if x["option"] not in OPCIONES:
                 errores.append(f"{d}: opción {x['option']!r}")
