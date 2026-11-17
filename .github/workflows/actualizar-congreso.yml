@@ -20,7 +20,8 @@ concurrency:
 jobs:
   actualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    # El límite de un runner es de 6 h; la primera corrida, sin caché, rondó las 5.
+    timeout-minutes: 355
     env:
       LEG: ${{ inputs.legislatura || '66' }}
     steps:
@@ -28,6 +29,14 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      # Las votaciones del Senado y la Gaceta y los sumarios del DOF no cambian
+      # una vez publicados: con el caché de la corrida anterior no se descargan
+      # otra vez. Se guarda aun si la corrida falla o se cancela.
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache
+          key: descargas-${{ github.run_id }}
+          restore-keys: descargas-
       - name: Clonar los repos de datos
         env:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
@@ -62,6 +71,11 @@ jobs:
           python -m congreso decretos --out ../repos/congreso-mexicano --repos ../repos > ../decretos.json
       - name: Validar (GATE)
         run: python -m congreso validar --out ../repos/congreso-mexicano
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .cache
+          key: descargas-${{ github.run_id }}
       - name: Abrir PR
         env:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
