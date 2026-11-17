@@ -6,6 +6,7 @@
     python -m congreso gaceta     --out ../congreso-mexicano --legislatura 66 [--tabla tabla3or1-3]
     python -m congreso decretos   --out ../congreso-mexicano --repos ..
     python -m congreso validar    --out ../congreso-mexicano
+    python -m congreso residuos   {pendientes,para-juicio,verificar} --out ../congreso-mexicano --trabajo /tmp/r [--repos ..]
 """
 from __future__ import annotations
 
@@ -44,6 +45,12 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--out", type=Path, required=True)
     a.add_argument("--repos", type=Path, required=True, help="carpeta con los repos de leyes")
 
+    a = sub.add_parser("residuos", help="decretos sin expediente, para el agente (ver congreso/residuos.py)")
+    a.add_argument("etapa", choices=["pendientes", "para-juicio", "verificar"])
+    a.add_argument("--out", type=Path, required=True)
+    a.add_argument("--trabajo", type=Path, required=True)
+    a.add_argument("--repos", type=Path, help="carpeta con los repos de leyes (para `pendientes`)")
+
     a = sub.add_parser("validar")
     a.add_argument("--out", type=Path, required=True)
 
@@ -63,6 +70,14 @@ def main(argv: list[str] | None = None) -> int:
     elif args.orden == "decretos":
         from . import decretos
         r = decretos.construir(args.out, args.repos)
+    elif args.orden == "residuos":
+        from . import residuos
+        if args.etapa == "pendientes":
+            r = residuos.pendientes(args.out, args.repos, args.trabajo)
+        elif args.etapa == "para-juicio":
+            r = residuos.para_juicio(args.out, args.trabajo)
+        else:
+            r = residuos.verificar(args.out, args.trabajo)
     else:
         from . import validar
         errores = validar.validar(args.out)

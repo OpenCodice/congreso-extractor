@@ -120,6 +120,12 @@ def validar(raiz: Path) -> list[str]:
         for ex in dec.get("expedientes", []):
             if ex["id"] not in expedientes:
                 errores.append(f"{d}: expediente {ex['id']} no existe")
+            if "criterio" not in ex:
+                errores.append(f"{d}: enlace a {ex['id']} sin criterio")
+            evidencia = ex.get("evidencia") or []
+            if "resolucion" in ex and not (evidencia and all(c.get("fuente") in ("dof", "expediente")
+                                                             and c.get("texto") for c in evidencia)):
+                errores.append(f"{d}: enlace a {ex['id']} resuelto por agente sin evidencia citada")
         for c in dec.get("candidatos_expediente", []):
             if c["id"] not in expedientes:
                 errores.append(f"{d}: candidato {c['id']} no existe")

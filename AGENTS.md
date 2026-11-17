@@ -21,6 +21,10 @@ fuera de la biblioteca estándar de Python 3.12.
   cada fuente a un mandato.
 - `padron.py`, `votaciones.py`, `decretos.py` — arman los registros Popolo y
   sus extensiones; `validar.py`, los invariantes del repo de datos.
+- `residuos.py` — los decretos que `decretos` no liga a su expediente, para el
+  agente: pendientes, verificación de sus citas y aplicación del registro
+  `resoluciones/decretos/` (un lote por corrida; no se edita a mano).
+  Los briefs y el lanzador, en `scripts/agente/`.
 - `red.py` — descargas con pausa, reintentos y caché en `.cache/` (no se
   versiona); cada dato guarda URL, fecha de consulta y sha256.
 - `catalogos.py` — entidades (claves de `leyes-estatales`), partidos y cámaras.
@@ -35,6 +39,7 @@ EGRESS_MX_TOKEN=… python3 -m congreso senado --out ../congreso-mexicano --legi
 EGRESS_MX_TOKEN=… python3 -m congreso gaceta --out ../congreso-mexicano --legislatura 66
 python3 -m congreso decretos   --out ../congreso-mexicano --repos ..
 python3 -m congreso validar    --out ../congreso-mexicano
+python3 -m congreso residuos pendientes --out ../congreso-mexicano --repos .. --trabajo /tmp/r
 python3 -m pytest -q
 ```
 
@@ -51,6 +56,15 @@ abre en `congreso-mexicano` un PR `verificado` con un commit por tipo de dato
 cuadra se omite y se anota en el PR; el resto se publica. Lo lanza el Worker
 `scheduler` de `constitucion-extractor` cada lunes a las 18:00 UTC, después de
 las vigilancias de leyes.
+
+Al terminar con éxito, `resolver-residuos.yml` lleva al agente lo que quedó
+sin ligar: uno propone el expediente con citas, `residuos para-juicio` deja
+pasar solo las propuestas cuyas citas están en su fuente (sin la nota del que
+propuso), y otro agente confirma o rechaza. El veredicto, confirmado o no, se
+registra en `resoluciones/` (un decreto ya juzgado con los mismos candidatos no
+vuelve al agente) y los decretos se regeneran con él en un PR. El agente corre
+sin credenciales en disco: el checkout no las guarda y los repos se clonan sin
+token.
 
 ## Red
 

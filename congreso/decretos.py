@@ -19,7 +19,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from . import catalogos, datos, dof, red, sil
+from . import catalogos, datos, dof, red, residuos, sil
 from .texto import clave_nombre
 
 REPOS_DOF = ("constitucion-mexicana", "leyes-federales", "fiscal-mexicano")
@@ -207,9 +207,11 @@ def construir(raiz: Path, repos: Path) -> dict:
     por_fecha: dict[str, list[dict]] = {}
     for d in decretos.values():
         por_fecha.setdefault(d["fecha"], []).append(d)
-    errores = []
     for fecha, lista in por_fecha.items():
         _emparejar(lista, [e for e in expedientes if e.get("publicado_dof") == fecha], nombres)
+    # Lo que quedó sin ligar puede tener una resolución confirmada (ver `residuos`).
+    errores = residuos.aplicar(list(decretos.values()), expedientes)
+    for lista in por_fecha.values():
         for d in lista:
             if "cpeum" not in {x["documento"] for x in d["documentos"]} or not d["expedientes"]:
                 continue

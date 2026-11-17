@@ -1,0 +1,130 @@
+name: Resolver residuos con el agente
+
+# Decretos que `decretos` no ligó a su expediente: un agente propone con citas,
+# el código verifica las citas, otro agente juzga (ver congreso/residuos.py).
+# Lo confirmado y lo rechazado se registran en `resoluciones/` de este repo, y
+# los decretos se regeneran con ese registro en un PR a congreso-mexicano. Corre
+# al terminar cada actualización, o a mano: gh workflow run resolver-residuos.yml
+on:
+  workflow_run:
+    workflows: [Actualizar congreso-mexicano]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: actualizar-congreso
+  cancel-in-progress: false
+
+jobs:
+  resolver:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TRABAJO: /tmp/residuos
+    steps:
+      # Sin credenciales en disco: el agente tiene Bash y no debe poder leerlas.
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache
+          key: descargas-${{ github.run_id }}
+          restore-keys: descargas-
+      - name: Esperar a que se fusione el PR de la actualización
+        env:
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
+        run: |
+          for i in $(seq 1 30); do
+            n=$(gh pr list -R OpenCodice/congreso-mexicano --state open --json number -q length)
+            [ "$n" = "0" ] && exit 0
+            sleep 30
+          done
+          echo "::error::congreso-mexicano sigue con PR abiertos"; exit 1
+      - name: Clonar los repos de datos
+        run: |
+          mkdir -p ../repos
+          for r in congreso-mexicano constitucion-mexicana leyes-federales fiscal-mexicano; do
+            git clone -q --filter=blob:none "https://github.com/OpenCodice/$r.git" "../repos/$r"
+          done
+      - name: Pendientes
+        run: python -m congreso residuos pendientes --out ../repos/congreso-mexicano --repos ../repos --trabajo "$TRABAJO"
+      - name: Agente — proponer
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bash scripts/agente/residuos.sh proponer
+      - name: Verificar las citas
+        run: python -m congreso residuos para-juicio --out ../repos/congreso-mexicano --trabajo "$TRABAJO"
+      - name: Agente — juzgar
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: bash scripts/agente/residuos.sh juzgar
+      - name: Registrar
+        run: python -m congreso residuos verificar --out ../repos/congreso-mexicano --trabajo "$TRABAJO" | tee ../registro.json
+      - name: Publicar el registro en el extractor
+        env:
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
+        run: |
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          [ -n "$(git status --porcelain -- resoluciones)" ] || exit 0
+          git config user.name "opencodice-ci"
+          git config user.email "opencodice-ci@users.noreply.github.com"
+          git add resoluciones
+          git commit -q -m "Resoluciones de decretos sin expediente ($(date -u +%Y-%m-%d))"
+          for i in 1 2 3; do
+            git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0
+            git rebase --abort 2>/dev/null || true; sleep $((i * 5))
+          done
+          echo "::error::No se pudo publicar el registro"; exit 1
+      - name: Decretos con las resoluciones
+        run: |
+          python -m congreso decretos --out ../repos/congreso-mexicano --repos ../repos > ../decretos.json
+          python -m congreso validar --out ../repos/congreso-mexicano
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .cache
+          key: descargas-${{ github.run_id }}
+      - name: Abrir PR
+        env:
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
+        run: |
+          cd ../repos/congreso-mexicano
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/OpenCodice/congreso-mexicano.git"
+          git fetch -q origin
+          git config user.name "opencodice-ci"
+          git config user.email "opencodice-ci@users.noreply.github.com"
+          rama="datos/residuos-$(date -u +%Y-%m-%d-%H%M)"
+          git checkout -q -b "$rama"
+          python "$GITHUB_WORKSPACE/scripts/commits.py" .
+          if [ "$(git rev-list --count origin/main..HEAD)" = "0" ]; then
+            echo "Sin cambios."; exit 0
+          fi
+          git push -q origin "$rama"
+          python - <<'PY' > ../../cuerpo.md
+          import json
+          r = json.load(open("../../registro.json")); d = json.load(open("../../decretos.json"))
+          print("Decretos ligados a su expediente por el agente (propuesta con citas verificadas y confirmada por un segundo agente).")
+          print(f"Confirmadas: {r['confirmadas']} · rechazadas: {r['rechazadas']} · sin expediente entre los candidatos: {r['sin_expediente']} · sin veredicto: {r['sin_veredicto']}"
+                + (f" · registro: resoluciones/decretos/{r['lote']}" if r.get("lote") else ""))
+          print(f"Decretos: {d['decretos']} · con expediente: {d['con_expediente']} · ambiguos: {d['ambiguos']}")
+          for e in d["avisos"][:40]:
+              print(f"- {e[:300]}")
+          PY
+          gh label create verificado -R OpenCodice/congreso-mexicano --force >/dev/null
+          gh pr create -R OpenCodice/congreso-mexicano --head "$rama" --base main \
+            --title "Decretos ligados por resolución del agente ($(date -u +%Y-%m-%d))" \
+            --body-file ../../cuerpo.md --label verificado
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: residuos
+          path: /tmp/residuos
+          if-no-files-found: ignore
