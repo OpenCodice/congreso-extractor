@@ -131,6 +131,13 @@ pasos no corren. Para explorar páginas nuevas de esas fuentes:
 descargado como artefacto. El SITL (sitl.diputados.gob.mx) responde 403 aun
 desde México.
 
+El Senado (Incapsula) bloquea si se le pide rápido: se le pide cada 12 s
+(`CONGRESO_PAUSA_SENADO`), ante un bloqueo se espera 2 y 10 min, y cada
+corrida descarga a lo más 120 min (`CONGRESO_PRESUPUESTO_SENADO`). Lo que
+falta queda anotado en `errores` y sigue en la siguiente corrida desde el
+caché, sin marcarse como retirado. Una respuesta cortada a medias
+(`IncompleteRead`) se reintenta como cualquier falla de red.
+
 ## Reglas
 
 - Fidelidad: un dato sale de una fuente oficial y cita su URL y huella. Lo

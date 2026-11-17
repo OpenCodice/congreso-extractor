@@ -7,6 +7,7 @@ sha256 del contenido. Esa procedencia acompaña a cada dato en el repo.
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import os
 import sys
@@ -40,6 +41,11 @@ EGRESS_MX = "https://egress-mx.danielcardeenas.workers.dev/"
 
 class Bloqueado(RuntimeError):
     pass
+
+
+# Fallas de red que se reintentan; una respuesta cortada a medias
+# (IncompleteRead) es HTTPException, no URLError.
+ERRORES_RED = (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException)
 
 
 CACHE = Path(os.environ.get("CONGRESO_CACHE", Path(__file__).resolve().parent.parent / ".cache"))
@@ -114,7 +120,7 @@ def obtener(url: str, datos: dict | None = None, vigencia_horas: float = 12, int
             if bloqueado(contenido):
                 contenido = _esperar_bloqueo(url, cuerpo, bloqueos)
             break
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+        except ERRORES_RED as e:
             _ultima = time.monotonic()
             error = e
             time.sleep(PAUSA * (2 ** intento) * 3)
@@ -136,7 +142,11 @@ def _esperar_bloqueo(url: str, cuerpo: bytes | None, esperas: tuple[int, ...]) -
     for espera in esperas:
         print(f"bloqueado por el firewall; espero {espera} s: {url}", file=sys.stderr, flush=True)
         time.sleep(espera)
-        contenido = _pedir(url, cuerpo)
+        try:
+            contenido = _pedir(url, cuerpo)
+        except ERRORES_RED:
+            # Mientras bloquea, el firewall también corta conexiones.
+            contenido = BLOQUEOS[0]
         _ultima = time.monotonic()
         if not bloqueado(contenido):
             return contenido

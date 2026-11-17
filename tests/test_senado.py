@@ -80,3 +80,13 @@ def test_emparejar_en_orden():
 def test_sin_par_en_otra_fecha():
     vs = [dict(senado.votacion(leer("votacion_5139.html")), clave="5139", orden=5139)]
     assert cotejo.emparejar(vs, [_sil("5146374", 1, "2026-09-30", "nacionalidad única")], "el Senado") == {}
+
+
+def test_presupuesto_agotado_deja_el_resto_sin_retirar(tmp_path, monkeypatch):
+    from congreso import red, senado, votaciones_senado
+    monkeypatch.setattr(votaciones_senado, "PRESUPUESTO", -1)
+    monkeypatch.setattr(red, "obtener", lambda *a, **k: red.Respuesta("u", b"", "2026-11-18T00:00:00Z", "0"))
+    monkeypatch.setattr(senado, "listado", lambda html: [{"clave": "1"}, {"clave": "2"}])
+    r = votaciones_senado.construir(tmp_path, 66)
+    assert r["votaciones"] == 0 and r["retiradas_de_la_fuente"] == 0
+    assert any("quedan 2 votaciones" in e for e in r["errores"])

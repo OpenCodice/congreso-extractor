@@ -6,6 +6,8 @@ SIL solo da como conteos. El enlace con el SIL y el cotejo, en `cotejo`.
 """
 from __future__ import annotations
 
+import os
+import time
 from collections import Counter
 from pathlib import Path
 
@@ -19,6 +21,10 @@ from .texto import romano
 VIGENCIA = 24 * 365
 # Esperas ante el firewall del Senado antes de dejar el resto para otra corrida.
 ESPERAS = (120, 600)
+# Minutos de descarga por corrida: con el firewall, bajar todo de cero toma más
+# que una corrida; lo que falte sigue en la siguiente, desde el caché, y así no
+# se quedan sin correr los pasos de después.
+PRESUPUESTO = float(os.environ.get("CONGRESO_PRESUPUESTO_SENADO", "120"))
 
 
 def indice(raiz: Path, leg: str, camara: str) -> nombres.Indice:
@@ -90,7 +96,12 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     eventos_sil = [e for e in datos.todos(raiz, f"votaciones/{leg}/senado") if e["id"].startswith("sil-")]
 
     leidas, errores = [], []
+    inicio = time.monotonic()
     for i, x in enumerate(listado):
+        if time.monotonic() - inicio > PRESUPUESTO * 60:
+            errores.append(f"se agotaron los {PRESUPUESTO:g} min de descarga del Senado; quedan "
+                           f"{len(listado) - i} votaciones para la siguiente corrida")
+            break
         try:
             rv = red.obtener(senado.url_votacion(x["clave"], legislatura), vigencia_horas=VIGENCIA, bloqueos=ESPERAS)
             rt = red.obtener(senado.url_tabla(x["clave"], legislatura), vigencia_horas=VIGENCIA, bloqueos=ESPERAS)

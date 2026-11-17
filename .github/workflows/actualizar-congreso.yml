@@ -79,6 +79,8 @@ jobs:
       - name: Senado y Gaceta con las lecturas verificadas
         env:
           EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
+          # Lo nuevo del Senado ya se intentó arriba; aquí solo se relee el caché.
+          CONGRESO_PRESUPUESTO_SENADO: "15"
         run: |
           # Solo si el agente aportó lecturas nuevas: lo demás ya está en el caché.
           [ -n "$(git status --porcelain -- lecturas)" ] || exit 0
@@ -93,6 +95,8 @@ jobs:
       - name: Senado y Gaceta con las lecturas verificadas (2)
         env:
           EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
+          # Lo nuevo del Senado ya se intentó arriba; aquí solo se relee el caché.
+          CONGRESO_PRESUPUESTO_SENADO: "15"
         run: |
           [ -n "$(git status --porcelain -- lecturas)" ] || exit 0
           python -m congreso senado --out ../repos/congreso-mexicano --legislatura "$LEG" > ../senado.json
