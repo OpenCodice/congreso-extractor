@@ -14,6 +14,10 @@ from .cotejo import Omitida
 from .texto import romano
 
 
+# Esperas ante el firewall del Senado antes de dejar el resto para otra corrida.
+ESPERAS = (120, 600)
+
+
 def indice(raiz: Path, leg: str, camara: str) -> nombres.Indice:
     personas = {p["id"]: p for p in datos.todos(raiz, "personas")}
     return nombres.Indice(list(datos.todos(raiz, f"mandatos/{leg}/{camara}")), personas)
@@ -59,13 +63,19 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     eventos_sil = [e for e in datos.todos(raiz, f"votaciones/{leg}/senado") if e["id"].startswith("sil-")]
 
     leidas, errores = [], []
-    for x in listado:
+    for i, x in enumerate(listado):
         try:
             # Una votación publicada no cambia: se descarga una vez al mes a lo más.
-            rv = red.obtener(senado.url_votacion(x["clave"], legislatura), vigencia_horas=24 * 30)
+            rv = red.obtener(senado.url_votacion(x["clave"], legislatura), vigencia_horas=24 * 30, bloqueos=ESPERAS)
             v = dict(senado.votacion(senado.decodificar(rv.contenido)), clave=x["clave"], orden=int(x["clave"]))
-            rt = red.obtener(senado.url_tabla(x["clave"], legislatura), vigencia_horas=24 * 30)
+            rt = red.obtener(senado.url_tabla(x["clave"], legislatura), vigencia_horas=24 * 30, bloqueos=ESPERAS)
             leidas.append((v, senado.tabla(senado.decodificar(rt.contenido)), [rv, rt]))
+        except red.Bloqueado:
+            # El firewall del sitio no cede: lo que falta queda para la siguiente
+            # corrida (lo ya descargado está en el caché) y no se marca retirado.
+            errores.append(f"el sitio del Senado bloqueó las peticiones; quedan {len(listado) - i} "
+                           f"votaciones para la siguiente corrida")
+            break
         except (ValueError, RuntimeError, KeyError) as e:
             errores.append(f"senado {x['clave']}: {e}")
 

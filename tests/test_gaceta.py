@@ -78,3 +78,12 @@ def test_dos_filas_de_la_misma_persona_no_se_atribuyen():
     filas = gaceta.lista(leer("lista_3or1_evento3_favor.html"))[:2]
     votos, sin_mandato, inconsistencias = cotejo.votos(filas, _IndiceRepetido())
     assert votos == [] and sin_mandato == filas and "misma persona x" in inconsistencias[0]
+
+
+def test_lista_con_presentes_que_no_votaron():
+    filas = gaceta.lista(leer("lista_1or1_evento31.html"))
+    # La tabla de esta votación: 362 a favor, 89 en contra y 48 ausentes.
+    assert len(filas) == 499 and Counter(f["opcion"] for f in filas) == {"yes": 362, "no": 89, "absent": 48}
+    c = Counter((f["grupo"], f["opcion"]) for f in filas)
+    assert c[("Morena", "yes")] == 233 and c[("Ind.", "yes")] == 1
+    assert {f["opcion"] for f in filas} <= {"yes", "no", "abstain", "not voting", "absent"}

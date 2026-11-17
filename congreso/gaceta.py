@@ -30,7 +30,8 @@ _FECHA = re.compile(r"(\d{1,2})\s+de\s+([a-z]+)\s+de\s+(\d{4})")
 SENTIDOS = (("favor", "yes"), ("contra", "no"), ("abstencion", "abstain"), ("quorum", "not voting"),
             ("ausente", "absent"))
 _FRASES = {"votaron a favor": "yes", "votaron en contra": "no", "se abstuvieron": "abstain", "votaron en abstencion": "abstain",
-           "votaron por quorum": "not voting", "solo asistencia": "not voting", "estuvieron ausentes": "absent"}
+           "votaron por quorum": "not voting", "solo asistencia": "not voting",
+           "estuvieron presentes y no votaron": "not voting", "estuvieron ausentes": "absent"}
 
 # Encabezados de la tabla y nombres de los grupos en las listas → etiqueta del catálogo.
 GRUPOS = {"mrn": "Morena", "morena": "Morena", "pan": "PAN", "partido accion nacional": "PAN",

@@ -13,15 +13,23 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 AGENTE = "Mozilla/5.0 (compatible; OpenCodice/1.0; +https://github.com/OpenCodice)"
 PAUSA = float(os.environ.get("CONGRESO_PAUSA", "3.0"))
-# Página que sirve el firewall del SIL (con estado 200) cuando limita las peticiones.
-BLOQUEO = b"This page can't be displayed"
+# Páginas que sirven los firewalls (con estado 200) cuando limitan las
+# peticiones: la del SIL y la de Incapsula (sitio del Senado). Nunca se guardan.
+BLOQUEOS = (b"This page can't be displayed", b"_Incapsula_Resource")
 ESPERAS_BLOQUEO = (60, 180, 600, 1200)
+# El Senado bloquea tras unas diez peticiones seguidas a 3 s.
+PAUSAS = {"www.senado.gob.mx": float(os.environ.get("CONGRESO_PAUSA_SENADO", "12"))}
+
+
+def bloqueado(contenido: bytes) -> bool:
+    return any(b in contenido[:3000] for b in BLOQUEOS)
 
 
 # Sitios que rechazan conexiones de fuera de México: se piden por el Worker
@@ -86,8 +94,10 @@ def obtener(url: str, datos: dict | None = None, vigencia_horas: float = 12, int
     meta = ruta.with_suffix(".json")
     if ruta.exists() and meta.exists() and time.time() - meta.stat().st_mtime < vigencia_horas * 3600:
         contenido = ruta.read_bytes()
-        m = json.loads(meta.read_text())
-        return Respuesta(url, contenido, m["consultado"], hashlib.sha256(contenido).hexdigest(), datos)
+        # Una página de bloqueo que haya quedado en el caché no cuenta.
+        if not bloqueado(contenido):
+            m = json.loads(meta.read_text())
+            return Respuesta(url, contenido, m["consultado"], hashlib.sha256(contenido).hexdigest(), datos)
 
     cuerpo = None
     if datos is not None:
@@ -95,13 +105,13 @@ def obtener(url: str, datos: dict | None = None, vigencia_horas: float = 12, int
         cuerpo = urlencode(datos, doseq=True, encoding="cp1252").encode()
     error = None
     for intento in range(intentos):
-        espera = PAUSA - (time.monotonic() - _ultima)
+        espera = PAUSAS.get(urlsplit(url).hostname, PAUSA) - (time.monotonic() - _ultima)
         if espera > 0:
             time.sleep(espera)
         try:
             contenido = _pedir(url, cuerpo)
             _ultima = time.monotonic()
-            if BLOQUEO in contenido[:2000]:
+            if bloqueado(contenido):
                 contenido = _esperar_bloqueo(url, cuerpo, bloqueos)
             break
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
@@ -111,7 +121,7 @@ def obtener(url: str, datos: dict | None = None, vigencia_horas: float = 12, int
     else:
         raise RuntimeError(f"no se pudo descargar {url}: {error}")
 
-    if BLOQUEO in contenido[:2000]:
+    if bloqueado(contenido):
         raise Bloqueado(url)
     consultado = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     ruta.parent.mkdir(parents=True, exist_ok=True)
@@ -128,6 +138,6 @@ def _esperar_bloqueo(url: str, cuerpo: bytes | None, esperas: tuple[int, ...]) -
         time.sleep(espera)
         contenido = _pedir(url, cuerpo)
         _ultima = time.monotonic()
-        if BLOQUEO not in contenido[:2000]:
+        if not bloqueado(contenido):
             return contenido
     raise Bloqueado(url)
