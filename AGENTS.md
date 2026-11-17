@@ -61,7 +61,8 @@ abre en `congreso-mexicano` un PR `verificado` con un commit por tipo de dato
 `revisar-pr` corre `validar` y lo fusiona con rebase. Un expediente que no
 cuadra se omite y se anota en el PR; el resto se publica. Lo lanza el Worker
 `scheduler` de `constitucion-extractor` cada lunes a las 18:00 UTC, después de
-las vigilancias de leyes.
+las vigilancias de leyes. Al fusionarse el PR, avisa a `constitucion-web`
+(`repository_dispatch` datos-actualizados) para que la web se regenere.
 
 Al terminar con éxito, `resolver-residuos.yml` lleva al agente lo que quedó
 sin ligar: uno propone el expediente con citas, `residuos para-juicio` deja

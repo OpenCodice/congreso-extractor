@@ -122,6 +122,24 @@ jobs:
           gh pr create -R OpenCodice/congreso-mexicano --head "$rama" --base main \
             --title "Decretos ligados por resolución del agente ($(date -u +%Y-%m-%d))" \
             --body-file ../../cuerpo.md --label verificado
+      - name: Avisar a la web
+        # La web se genera de los datos fusionados: se espera a que revisar-pr
+        # fusione el PR y se pide un despliegue (constitucion-web, deploy.yml).
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.PR_TOKEN }}
+        run: |
+          for _ in $(seq 1 30); do
+            abiertos=$(gh pr list -R OpenCodice/congreso-mexicano --state open --json headRefName -q '[.[] | select(.headRefName | startswith("datos/"))] | length')
+            [ "$abiertos" = 0 ] && break
+            sleep 30
+          done
+          for intento in 1 2 3; do
+            gh api repos/OpenCodice/constitucion-web/dispatches -f event_type=datos-actualizados && exit 0
+            sleep $((intento * 30))
+          done
+          # No falla la actualización: sus datos ya están publicados.
+          echo "::warning::No se pudo avisar a la web; se actualizará en su próximo despliegue."
       - uses: actions/upload-artifact@v4
         if: always()
         with:
