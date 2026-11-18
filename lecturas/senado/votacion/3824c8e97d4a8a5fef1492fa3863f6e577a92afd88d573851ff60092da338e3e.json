@@ -1,0 +1,25 @@
+{
+  "clave": "4916",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Seguridad Pública y de Estudios Legislativos, el que contiene minuta con proyecto de decreto por el que se expide la Ley General del Sistema Nacional de Seguridad Pública.",
+    "conteos": {
+      "abstain": 0,
+      "no": 30,
+      "yes": 77
+    },
+    "fecha": "2025-07-01",
+    "motion": "VOTACIÓN EN LO PARTICULAR DE LOS ARTÍCULOS 42, 93, 100, 101, 102, 104 Y 105 DEL PROYECTO DE DECRETO, EN LOS TÉRMINOS DEL DICTAMEN."
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "3824c8e97d4a8a5fef1492fa3863f6e577a92afd88d573851ff60092da338e3e",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4916",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "clave": "4904",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Bienestar y de Estudios Legislativos, Primera, el que contiene proyecto de decreto por el que se reforman, adicionan y derogan diversas disposiciones de la Ley General de Desarrollo Social, de la Ley Federal de Presupuesto y Responsabilidad Hacendaria y de la Ley General de Contabilidad Gubernamental.",
+    "conteos": {
+      "abstain": 0,
+      "no": 34,
+      "yes": 71
+    },
+    "fecha": "2025-06-26",
+    "motion": "VOTACIÓN EN LO PARTICULAR DE LOS ARTÍCULOS 4, 5, 29, 30, 36, 37, 37 Bis, 72, 72 Bis, 74, 75, 76, 77, 80 y 84 de la Ley General de Desarrollo Social, 110 de la Ley Federal de Presupuesto y Responsabilidad Hacendaria y de los transitorios Décimo Primero y Décimo Tercero, en los términos del dictamen."
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "fe235561f3e8e6b23b77644c292d314607b6bae17d5133aba902a8f6d0a0b2b2",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4904",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

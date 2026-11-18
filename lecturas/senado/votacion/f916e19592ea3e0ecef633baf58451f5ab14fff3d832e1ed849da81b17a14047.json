@@ -1,0 +1,25 @@
+{
+  "clave": "4917",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Seguridad Pública y de Estudios Legislativos, el que contiene minuta con proyecto de decreto por el que se expide la Ley del Sistema Nacional de Investigación e Inteligencia, en Materia de Seguridad Pública.",
+    "conteos": {
+      "abstain": 3,
+      "no": 29,
+      "yes": 67
+    },
+    "fecha": "2025-07-01",
+    "motion": "VOTACIÓN EN LO GENERAL Y DE LOS ARTÍCULOS NO RESERVADOS"
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "f916e19592ea3e0ecef633baf58451f5ab14fff3d832e1ed849da81b17a14047",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4917",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

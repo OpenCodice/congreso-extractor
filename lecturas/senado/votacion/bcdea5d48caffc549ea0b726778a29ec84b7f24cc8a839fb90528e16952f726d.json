@@ -1,0 +1,25 @@
+{
+  "clave": "4913",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Guardia Nacional y Estudios Legislativos, Primera, el que contiene minuta con proyecto de decreto por el que se expide la Ley de la Guardia Nacional y se reforman, adicionan y derogan diversas disposiciones de la Ley Orgánica de la Administración Pública Federal, de la Ley Orgánica del Ejército y Fuerza Aérea Mexicanos, de la Ley de Educación Militar del Ejército y Fuerza Aérea Mexicanos, de la Ley de Ascensos y Recompensas del Ejército y Fuerza Aérea Mexicanos, de la Ley del Instituto de Seguridad Social para las Fuerzas Armadas Mexicanas, de la Ley de Disciplina del Ejército y Fuerza Aérea Mexicanos, del Código de Justicia Militar y del Código Militar de Procedimientos Penales.",
+    "conteos": {
+      "abstain": 0,
+      "no": 34,
+      "yes": 75
+    },
+    "fecha": "2025-06-30",
+    "motion": "VOTACIÓN EN LO GENERAL Y DE LOS ARTÍCULOS NO RESERVADOS"
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "bcdea5d48caffc549ea0b726778a29ec84b7f24cc8a839fb90528e16952f726d",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4913",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

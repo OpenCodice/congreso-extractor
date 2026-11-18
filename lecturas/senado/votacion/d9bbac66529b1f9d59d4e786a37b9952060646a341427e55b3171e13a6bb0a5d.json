@@ -1,0 +1,25 @@
+{
+  "clave": "4905",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Reglamentos y Prácticas Parlamentarias; de Anticorrupción y Transparencia; y de Estudios Legislativos, el que contiene proyecto de decreto por el que se reforman y adicionan diversas disposiciones de la Ley Orgánica del Congreso General de los Estados Unidos Mexicanos.",
+    "conteos": {
+      "abstain": 0,
+      "no": 0,
+      "yes": 104
+    },
+    "fecha": "2025-06-26",
+    "motion": "VOTACIÓN EN LO GENERAL Y LO PARTICULAR"
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "d9bbac66529b1f9d59d4e786a37b9952060646a341427e55b3171e13a6bb0a5d",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4905",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

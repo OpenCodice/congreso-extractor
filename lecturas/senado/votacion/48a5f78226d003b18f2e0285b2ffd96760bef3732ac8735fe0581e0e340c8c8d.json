@@ -1,0 +1,25 @@
+{
+  "clave": "4878",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Gobernación; Para la Igualdad de Género; y de Estudios Legislativos, Primera, el que contiene proyecto de decreto por el que se reforma el artículo 18 de la Ley sobre el Escudo, la Bandera y el Himno Nacionales, en materia de reconocimiento a las mujeres que han transformado nuestra patria.",
+    "conteos": {
+      "abstain": 0,
+      "no": 0,
+      "yes": 103
+    },
+    "fecha": "2025-06-23",
+    "motion": "VOTACIÓN EN LO GENERAL Y LO PARTICULAR"
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "48a5f78226d003b18f2e0285b2ffd96760bef3732ac8735fe0581e0e340c8c8d",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4878",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

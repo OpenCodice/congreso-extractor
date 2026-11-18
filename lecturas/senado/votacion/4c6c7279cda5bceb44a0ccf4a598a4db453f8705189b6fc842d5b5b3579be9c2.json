@@ -1,0 +1,25 @@
+{
+  "clave": "4910",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Economía y de Estudios Legislativos, el que contiene proyecto de decreto por el que se reforman, adicionan y derogan diversas disposiciones de la Ley federal de Competencia Económica y de la Ley Federal de las Entidades Paraestatales.",
+    "conteos": {
+      "abstain": 0,
+      "no": 34,
+      "yes": 72
+    },
+    "fecha": "2025-06-28",
+    "motion": "VOTACIÓN EN LO PARTICULAR DE LOS ARTÍCULOS 3, 6, 10, 12, 13 BIS, 18, 23, 31, 35, 54, 77 BIS, 136, 140, 141 Y 142 DE LA LEY FEDERAL DE COMPETENCIA ECONÓMICA Y DE LOS ARTÍCULOS TRANSITORIOS TERCERO, CUARTO Y DÉCIMO SEXTO DEL PROYECTO DE DECRETO, EN LOS TÉRMINOS DEL DICTAMEN."
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "4c6c7279cda5bceb44a0ccf4a598a4db453f8705189b6fc842d5b5b3579be9c2",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4910",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

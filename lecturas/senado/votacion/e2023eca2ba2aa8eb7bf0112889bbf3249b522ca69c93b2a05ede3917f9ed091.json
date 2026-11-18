@@ -1,0 +1,25 @@
+{
+  "clave": "4899",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Justicia y de Estudios Legislativos, el que contiene proyecto de decreto por el que se reforman, adicionan y derogan diversas disposiciones de la Ley Federal para la Prevención e Identificación de Operaciones con Recursos de Procedencia Ilícita, y se reforman los artículos 11 bis y 400 bis del Código Penal Federal.",
+    "conteos": {
+      "abstain": 19,
+      "no": 13,
+      "yes": 74
+    },
+    "fecha": "2025-06-25",
+    "motion": "VOTACIÓN EN LO GENERAL Y DE LOS ARTÍCULOS NO RESERVADOS"
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "e2023eca2ba2aa8eb7bf0112889bbf3249b522ca69c93b2a05ede3917f9ed091",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4899",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "clave": "5114",
+  "datos": {
+    "asunto": "Proyecto de decreto por el que se reforman y adicionan diversas disposiciones de la Ley General de Instituciones y Procedimientos Electorales, en Materia de Integridad en Candidaturas.",
+    "conteos": {
+      "abstain": 0,
+      "no": 40,
+      "yes": 85
+    },
+    "fecha": "2026-05-28",
+    "motion": "VOTACIÓN EN LO GENERAL Y DE LOS ARTÍCULOS NO RESERVADOS"
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "aee81d01fd25e112d8e7eea4fdb3675ca0a5cd21486573a05fdfdbb09616c6c4",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/5114",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

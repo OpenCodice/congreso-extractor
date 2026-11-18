@@ -1,0 +1,25 @@
+{
+  "clave": "4897",
+  "datos": {
+    "asunto": "Dictamen de la Comisión de Relaciones Exteriores, el que contiene proyecto de decreto por el que se aprueba el Acuerdo en el marco de la Convención de las Naciones Unidas sobre el Derecho del Mar relativo a la Conservación y el Uso Sostenible de la Diversidad Biológica Marina de las Zonas Situadas fuera de la Jurisdicción Nacional, adoptado en Nueva York el diecinueve de junio de dos mil veintitrés.",
+    "conteos": {
+      "abstain": 0,
+      "no": 0,
+      "yes": 104
+    },
+    "fecha": "2025-06-25",
+    "motion": "VOTACIÓN EN LO GENERAL"
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "3d76f385ee07a2324a364167ecc7c95b6166a451aef8ba3e7577e5a7dbce9680",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4897",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

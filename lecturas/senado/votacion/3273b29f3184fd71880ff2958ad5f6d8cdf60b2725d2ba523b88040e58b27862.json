@@ -1,0 +1,25 @@
+{
+  "clave": "5112",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Puntos Constitucionales y de Estudios Legislativos Primera, con proyecto de decreto por el que se reforman y adicionan diversas disposiciones de la Constitución Política de los Estados Unidos Mexicanos, en materia de reforma del Poder Judicial.",
+    "conteos": {
+      "abstain": 0,
+      "no": 40,
+      "yes": 86
+    },
+    "fecha": "2026-05-28",
+    "motion": "VOTACIÓN EN LO PARTICULAR DE LOS ARTÍCULOS 35, 96, 100, 116 Y 122 CONSTITUCIONALES; ARTÍCULOS TRANSITORIOS SEGUNDO Y CUARTO DEL DECRETO POR EL QUE SE REFORMAN, ADICIONAN Y DEROGAN DIVERSAS DISPOSICIONES DE LA CONSTITUCIÓN POLÍTICA DE LOS ESTADOS UNIDOS MEXICANOS, EN MATERIA DE REFORMA DEL PODER JUDICIAL, PUBLICADO EL 15 DE SEPTIEMBRE DE 2024 EN EL DIARIO OFICIAL DE LA FEDERACIÓN; Y ARTÍCULO TRANSITORIO OCTAVO DEL PROYECTO DE DECRETO, EN LOS TÉRMINOS DEL DICTAMEN."
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "3273b29f3184fd71880ff2958ad5f6d8cdf60b2725d2ba523b88040e58b27862",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/5112",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

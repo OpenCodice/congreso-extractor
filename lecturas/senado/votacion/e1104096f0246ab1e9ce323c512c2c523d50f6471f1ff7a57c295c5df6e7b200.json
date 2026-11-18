@@ -1,0 +1,25 @@
+{
+  "clave": "4881",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Hacienda y Crédito Público; y de Estudios Legislativos, Primera, el que contiene proyecto de decreto por el que se reforman y adicionan diversas disposiciones de la Ley de los Impuestos Generales de Importación y Exportación.",
+    "conteos": {
+      "abstain": 0,
+      "no": 0,
+      "yes": 92
+    },
+    "fecha": "2025-06-23",
+    "motion": "VOTACIÓN EN LO PARTICULAR DE LA NOTA 4 DEL CAPÍTULO 03 DE LA SECCIÓN 1 DEL ARTÍCULO PRIMERO DEL PROYECTO DE DECRETO, EN LOS TÉRMINOS DEL DICTAMEN."
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "e1104096f0246ab1e9ce323c512c2c523d50f6471f1ff7a57c295c5df6e7b200",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4881",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

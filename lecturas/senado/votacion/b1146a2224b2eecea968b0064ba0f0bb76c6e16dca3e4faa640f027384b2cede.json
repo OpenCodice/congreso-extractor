@@ -1,0 +1,25 @@
+{
+  "clave": "4909",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Economía y de Estudios Legislativos, el que contiene proyecto de decreto por el que se reforman, adicionan y derogan diversas disposiciones de la Ley federal de Competencia Económica y de la Ley Federal de las Entidades Paraestatales.",
+    "conteos": {
+      "abstain": 0,
+      "no": 35,
+      "yes": 69
+    },
+    "fecha": "2025-06-28",
+    "motion": "VOTACIÓN EN LO GENERAL Y DE LOS ARTÍCULOS NO RESERVADOS"
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "b1146a2224b2eecea968b0064ba0f0bb76c6e16dca3e4faa640f027384b2cede",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4909",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}

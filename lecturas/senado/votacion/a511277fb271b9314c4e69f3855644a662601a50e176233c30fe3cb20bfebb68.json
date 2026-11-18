@@ -1,0 +1,25 @@
+{
+  "clave": "4908",
+  "datos": {
+    "asunto": "Dictamen de las Comisiones Unidas de Gobernación y de Estudios Legislativos, el que contiene iniciativa con proyecto de decreto por el que se reforman, adicionan y derogan diversas disposiciones de la Ley General en materia de desaparición forzada de personas, desaparición cometida por particulares y del Sistema Nacional de Búsqueda de Personas, así como de la Ley General de Población, en materia de fortalecimiento de búsqueda, localización e identificación de personas desaparecidas.",
+    "conteos": {
+      "abstain": 6,
+      "no": 27,
+      "yes": 69
+    },
+    "fecha": "2025-06-27",
+    "motion": "VOTACIÓN EN LO PARTICULAR DE LOS ARTÍCULOS 4, 5, 12 BIS, 12 TER, 12 QUATER, 12 QUINQUIES, 12 SEXIES, 12 SEPTIES, 33, 45 Y 74 BIS DE LA LEY GENERAL EN MATERIA DE DESAPARICIÓN FORZADA DE PERSONAS, DESAPARICIÓN COMETIDA POR PARTICULARES Y DEL SISTEMA NACIONAL DE BÚSQUEDA DE PERSONAS, DE LOS ARTÍCULOS 91, 91 BIS, 91 TER, 91 QUATER, 91 QUINQUIES, 91 SEXIES, 114 BIS Y TRANSITORIO QUINTO DE LA LEY GENERAL DE POBLACIÓN Y DEL ARTÍCULO SEGUNDO TRANSITORIO DEL PROYECTO DECRETO EN LOS TÉRMINOS DEL DICTAMEN; Y DE LOS ARTÍCULOS TRANSITORIOS SEXTO Y OCTAVO DE LA LEY GENERAL EN MATERIA DE DESAPARICIÓN FORZADA DE PERSONAS, DESAPARICIÓN COMETIDA POR PARTICULARES Y DEL SISTEMA NACIONAL DE BÚSQUEDA DE PERSONAS, CON LAS MODIFICACIONES ACEPTADAS."
+  },
+  "datos_formulario": null,
+  "error_del_parser": "ValueError: votación sin conteo 'ABSTENCI'",
+  "fecha": "2026-11-18T03:26:38+00:00",
+  "fuente": "senado",
+  "sha256": "a511277fb271b9314c4e69f3855644a662601a50e176233c30fe3cb20bfebb68",
+  "tipo": "votacion",
+  "url": "https://www.senado.gob.mx/66/votacion/4908",
+  "verificacion": [
+    "cada nombre y cada cifra están en la página",
+    "las listas suman los totales que declara la fuente",
+    "las etiquetas de grupo y sentido son las del catálogo"
+  ]
+}
