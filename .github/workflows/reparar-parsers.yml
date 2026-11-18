@@ -200,7 +200,9 @@ jobs:
     # que piden (sus salidas `pedir*`).
     name: "estado pendiente=[false]"
     needs: [agente, compuertas, publicar]
-    if: ${{ always() }}
+    # Una corrida que se salta entera (la dispara cada actualización, también las
+    # que no publican) no declara nada.
+    if: ${{ always() && needs.agente.result != 'skipped' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

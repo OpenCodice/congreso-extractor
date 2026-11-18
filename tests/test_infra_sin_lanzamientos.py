@@ -88,7 +88,7 @@ def test_cada_cadena_termina_en_estado_con_su_artefacto():
         final = texto.split("\n  estado:\n", 1)[1]
         assert re.search(r'name: "estado pendiente=\[(true|false|\$\{\{.*\}\})\]"', final), nombre
         assert f"needs: [{', '.join(jobs[:-1])}]" in final, f"{nombre}: `estado` depende de todos los demás jobs"
-        assert "if: ${{ always() }}" in final and "permissions: {}" in final, nombre
+        assert "if: ${{ always()" in final and "permissions: {}" in final, nombre
         assert "NEEDS: ${{ toJSON(needs) }}" in final and "name: cadena" in final, nombre
         assert "${{" not in "".join(re.findall(r"^\s+run: .*$", final, re.M)), f"{nombre}: `needs` va por env"
 
