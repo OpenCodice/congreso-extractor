@@ -79,12 +79,34 @@ main de congreso-mexicano exige PR, historial lineal y aplica a los admins: un
 cambio a mano (la documentación, `Tipo: indice`) también va por PR. Un
 expediente que no cuadra se anota en el PR; el resto se publica.
 
+Ningún workflow ni script de este repo lanza una corrida, relanza una que
+falló ni avisa a otro repo: el único que lanza es el supervisor
+(`OpenCodice/supervisor`, cada 15 minutos). Lanza la actualización de cada
+hora y la que publica, relanza lo que falla y despliega `constitucion-web`
+cuando `congreso-mexicano` tiene commits nuevos. Lo que sí encadena GitHub
+solo: `reparar-parsers.yml` y `resolver-residuos.yml` corren por
+`workflow_run` al terminar cada actualización, y `revisar-pr.yml` es parte de
+la corrida que lo llama (`workflow_call`).
+
+Un paso que necesita otra corrida la **pide**: escribe la salida `pedir` con
+una petición en JSON (`{"workflow": "…", "inputs": {…}}`, sin `origen`) y su
+job la expone con un nombre que empieza por `pedir`. La única petición del
+repo es `pedir_actualizar`, del job `publicar` de `reparar-parsers.yml`. El
+último job de `actualizar-congreso.yml`, `reparar-parsers.yml` y
+`resolver-residuos.yml`, `estado pendiente=[false]` (no queda otra tanda con
+los mismos inputs), depende de todos los demás y sube el artefacto `cadena`:
+el resultado y las salidas de cada job, de donde el supervisor lee las
+peticiones. `tests/test_infra_sin_lanzamientos.py` falla si un workflow o un
+script vuelve a lanzar algo.
+
 El título de cada corrida lleva sus inputs
-(`actualizar-congreso legislatura=[66] publicar=[si] origen=[scheduler]`):
+(`actualizar-congreso legislatura=[66] publicar=[si] origen=[supervisor]`):
 la API de GitHub no los devuelve, y de ahí los leen `reparar-parsers.yml`,
-`resolver-residuos.yml` (solo actúan tras una con `publicar=[si]`) y el
-supervisor (`OpenCodice/supervisor`). `origen` dice quién la lanzó (vacío: a
-mano), y el último job, `estado pendiente=[false]`, que no queda otra tanda.
+`resolver-residuos.yml` (solo actúan tras una con ` publicar=[si] `) y el
+supervisor. `origen` dice quién la lanzó (`supervisor`; vacío: a mano).
+`sembrar-archivo.yml` y `sondear-mx.yml` son herramientas que se lanzan a
+mano: llevan el título y `origen`, sin job `estado`; tampoco lo llevan
+`desplegar-workers.yml`, que corre al cambiar `archivo/`, ni `revisar-pr.yml`.
 `tests.yml` corre `actionlint` y el lint del supervisor sobre estos workflows.
 
 Lo que abre un PR en congreso-mexicano va de uno en uno: las actualizaciones
@@ -95,13 +117,13 @@ se va a saltar, en un grupo propio: así ninguna de las dos ocupa el único
 lugar de espera del grupo que publica. Los PR llevan las etiquetas
 `verificado` y `automatico`.
 
-Lo lanza el Worker `scheduler` de `constitucion-extractor` cada hora. Las
+El supervisor lanza `actualizar-congreso.yml` cada hora (sus horarios, en
+`cadenas.toml` de ese repo). Las
 corridas `publicar=no` («solo pedir», unos minutos) recorren todo para pedirle
 al archivo lo nuevo: una cadena de páginas (listado → votación → lista) se
 completa en unas horas. La de las 18:00 UTC (`publicar=si`, también la de a
-mano) además lee con el agente, abre el PR y, al fusionarse, avisa a
-`constitucion-web` (`repository_dispatch` datos-actualizados) para que la web
-se regenere. Lo que el archivo todavía no tiene no se publica ni cuenta como
+mano) además lee con el agente y abre el PR; con el PR fusionado, el
+supervisor despliega `constitucion-web` para que la web se regenere. Lo que el archivo todavía no tiene no se publica ni cuenta como
 retirado: un expediente o una votación esperan completos (`pendientes_de_descarga`
 en el resumen del PR), y un paso que depende de una sola página (un listado,
 o los decretos, que necesitan todos sus sumarios) se queda como estaba.
@@ -142,7 +164,12 @@ de antes, tal como estaban, contra el código nuevo; `scripts/regresion.py` sin
 regresiones; cada fallo que dice resolver ahora se lee, y ninguna página que
 el cambio lee distinto contradice su lectura verificada. Un tercer job, sin
 correr código del agente, aplica ese mismo parche (por sha256), lo publica en
-main y relanza la actualización (una vez cada 12 h a lo más).
+main y pide una actualización que publique
+(`{"workflow":"actualizar-congreso.yml","inputs":{"publicar":"si"}}`), para
+que el parser reemplace a las lecturas del agente. Pide a lo más una vez cada
+12 h (`relanzar` de `compuertas_reparar.py publicar`: solo si no hubo otro
+arreglo publicado en ese lapso): cada publicación dispara otra reparación, y
+sin ese límite un arreglo tras otro encadenaría publicaciones.
 
 `scripts/regresion.py` sirve también a mano, antes de tocar un parser: lee
 cada página del caché (y de una carpeta de fallos) con el código de una
