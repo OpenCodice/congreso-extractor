@@ -46,4 +46,5 @@ jobs:
             echo "::warning::No se pudo clonar OpenCodice/supervisor: el lint del contrato de workflows no corrió."
             exit 0
           fi
+          pip install -q -r /tmp/supervisor/requirements.txt
           python3 /tmp/supervisor/supervisor/lint_workflows.py .
