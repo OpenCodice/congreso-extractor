@@ -2,6 +2,8 @@ name: Pruebas
 on:
   push: {branches: [main]}
   pull_request: {}
+permissions:
+  contents: read
 jobs:
   pruebas:
     runs-on: ubuntu-latest
@@ -11,3 +13,34 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -q pytest && python -m pytest -q
+
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Pruebas del Worker congreso-archivo
+        working-directory: archivo
+        run: node --check worker.js && node --test
+
+  workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: actionlint
+        env:
+          ACTIONLINT: 1.7.12
+        run: |
+          bash <(curl -fsSL "https://raw.githubusercontent.com/rhysd/actionlint/v${ACTIONLINT}/scripts/download-actionlint.bash") "$ACTIONLINT" "$RUNNER_TEMP"
+          "$RUNNER_TEMP/actionlint" -color
+      # El contrato de los workflows encadenados (run-name con los inputs, job
+      # `estado`), que el supervisor necesita para leer las corridas.
+      - name: Lint del supervisor
+        run: |
+          if ! git clone -q --depth 1 https://github.com/OpenCodice/supervisor.git /tmp/supervisor; then
+            echo "::warning::No se pudo clonar OpenCodice/supervisor: el lint del contrato de workflows no corrió."
+            exit 0
+          fi
+          python3 /tmp/supervisor/supervisor/lint_workflows.py .
