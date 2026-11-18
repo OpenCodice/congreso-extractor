@@ -36,7 +36,8 @@ fuera de la biblioteca estándar de Python 3.12.
   versiona); cada dato guarda URL, fecha de consulta y sha256. Con
   `CONGRESO_ARCHIVO`, lee del archivo en vez de la red (ver «Red»).
 - `archivo/` — el Worker `congreso-archivo`: archivo de páginas en R2 y
-  descargador perpetuo (su `README.md`).
+  descargador perpetuo (su `README.md`). Sus pruebas: `node --test` dentro de
+  `archivo/`. Se despliega solo al cambiar en main (`desplegar-workers.yml`).
 - `catalogos.py` — entidades (claves de `leyes-estatales`), partidos y cámaras.
 
 ## Comandos
@@ -52,6 +53,7 @@ python3 -m congreso decretos   --out ../congreso-mexicano --repos ..
 python3 -m congreso validar    --out ../congreso-mexicano
 python3 -m congreso residuos pendientes --out ../congreso-mexicano --repos .. --trabajo /tmp/r
 python3 -m pytest -q
+(cd archivo && node --test)
 ```
 
 El orden importa: las votaciones necesitan el padrón; las del Senado y la
@@ -76,6 +78,22 @@ ese sha, solo si es de una rama `datos/` del mismo repo y trae `verificado`.
 main de congreso-mexicano exige PR, historial lineal y aplica a los admins: un
 cambio a mano (la documentación, `Tipo: indice`) también va por PR. Un
 expediente que no cuadra se anota en el PR; el resto se publica.
+
+El título de cada corrida lleva sus inputs
+(`actualizar-congreso legislatura=[66] publicar=[si] origen=[scheduler]`):
+la API de GitHub no los devuelve, y de ahí los leen `reparar-parsers.yml`,
+`resolver-residuos.yml` (solo actúan tras una con `publicar=[si]`) y el
+supervisor (`OpenCodice/supervisor`). `origen` dice quién la lanzó (vacío: a
+mano), y el último job, `estado pendiente=[false]`, que no queda otra tanda.
+`tests.yml` corre `actionlint` y el lint del supervisor sobre estos workflows.
+
+Lo que abre un PR en congreso-mexicano va de uno en uno: las actualizaciones
+que publican y `resolver-residuos.yml` comparten el grupo de concurrency
+`actualizar-congreso`. Las «solo pedir», que no escriben en ningún repo, van
+en `actualizar-congreso-pedir`, y una corrida de `resolver-residuos.yml` que
+se va a saltar, en un grupo propio: así ninguna de las dos ocupa el único
+lugar de espera del grupo que publica. Los PR llevan las etiquetas
+`verificado` y `automatico`.
 
 Lo lanza el Worker `scheduler` de `constitucion-extractor` cada hora. Las
 corridas `publicar=no` («solo pedir», unos minutos) recorren todo para pedirle
@@ -135,7 +153,9 @@ revisión y con el árbol de trabajo, y sale con 1 si algo que se leía cambia:
 
 En CI nada se descarga de las fuentes: lo hace el Worker `congreso-archivo`
 (`archivo/`, ver su `README.md`), cada minuto y al ritmo de cada sitio, y lo
-guarda en R2. Con `CONGRESO_ARCHIVO` (su URL) y `CONGRESO_ARCHIVO_TOKEN`,
+guarda en R2. Si un sitio bloquea, su pausa sube y se le sigue sondeando cada
+vez más espaciado hasta que responde; `GET /salud` dice, por sitio, cuánto
+tiene pendiente, desde cuándo y cuándo bajó algo por última vez. Con `CONGRESO_ARCHIVO` (su URL) y `CONGRESO_ARCHIVO_TOKEN`,
 `red.obtener` lee la página del archivo (y la guarda en `.cache/`, que queda
 como copia local). Si no está, la anota y lanza `red.Pendiente`: ese expediente
 o esa votación se omiten en esta corrida, sin error ni retiro. Si está pero es
