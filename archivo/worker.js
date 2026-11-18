@@ -15,6 +15,8 @@
 // México (se pide por el Worker egress-mx; el SIL, además, no contesta a
 // Cloudflare fuera de México) y cuántas páginas baja como máximo por minuto.
 // La pausa sube sola si el sitio bloquea y baja poco a poco mientras no bloquee.
+// Un sitio cuya pausa ya no cabe en una invocación no se abandona: recibe un
+// solo sondeo cada vez que su pausa se cumple, y con cada éxito la pausa baja.
 export const SITIOS = {
   "sil.gobernacion.gob.mx": { pausa: 6000, mx: true, cupo: 8 },
   "www.senado.gob.mx": { pausa: 15000, mx: true, cupo: 3 },
@@ -26,8 +28,8 @@ export const SITIOS = {
 export const BLOQUEOS = ["This page can't be displayed", "_Incapsula_Resource"];
 const AGENTE = "Mozilla/5.0 (compatible; OpenCodice/1.0; +https://github.com/OpenCodice)";
 // Cada invocación del cron trabaja menos de un minuto: así no se enciman.
-const DURACION = 50_000;
-const PAUSA_MAX = 120_000;
+export const DURACION = 50_000;
+export const PAUSA_MAX = 120_000;
 const MAX_INTENTOS = 6;
 // Una página que falló de forma definitiva (404…) se vuelve a intentar si el
 // extractor la pide de nuevo pasado este tiempo.
@@ -105,34 +107,76 @@ async function descargar(env, p) {
   return { estado: "guardada" };
 }
 
+// ---------------------------------------------------------------- ritmo
+
 // Lo que un sitio puede bajar en una invocación: su ritmo, con un tope para
 // no pasar de los límites por invocación de Workers (subpeticiones a R2 y D1).
-function cupo(host, pausa) {
-  return Math.min(SITIOS[host].cupo, Math.floor(DURACION / pausa));
+// Nunca menos de una: con cupo 0 el sitio dejaría de intentarse y su pausa,
+// que solo baja al descargar, no bajaría jamás.
+export function cupo(host, pausa) {
+  return Math.min(SITIOS[host].cupo, Math.max(1, Math.floor(DURACION / pausa)));
+}
+
+// Cuánto esperar antes de la siguiente petición de la invocación, o null si ya
+// no cabe. La primera sale siempre (la separación con la invocación anterior
+// la guarda `espera_hasta`); las demás, a una pausa de la anterior y solo si
+// queda otra pausa antes del fin.
+export function esperaSiguiente({ hechas, ultima, pausa, ahora, fin }) {
+  if (!hechas) return 0;
+  const inicio = Math.max(ahora, ultima + pausa);
+  return inicio + pausa <= fin ? inicio - ahora : null;
+}
+
+export function trasGuardada(sitio) {
+  return { ...sitio, bloqueos: 0 };
+}
+
+export function trasBloqueo(sitio, ahora) {
+  const bloqueos = sitio.bloqueos + 1;
+  return { ...sitio, bloqueos, ultimo_bloqueo: ahora, espera_hasta: ahora + esperaBloqueo(bloqueos),
+           pausa_ms: Math.min(PAUSA_MAX, Math.round(sitio.pausa_ms * 1.25)) };
+}
+
+// Estado del sitio al terminar su parte de una invocación. `ultima` es la hora
+// de su última petición (0 si no hizo ninguna).
+export function trasRonda(sitio, { descargadas, bloqueada, ultima }, ahora) {
+  if (bloqueada) return sitio;
+  const base = SITIOS[sitio.host].pausa;
+  let pausa = sitio.pausa_ms;
+  // Si descargó y no hubo bloqueos en la última hora, la pausa vuelve poco a
+  // poco a su mínimo.
+  if (descargadas > 0 && pausa > base && ahora - sitio.ultimo_bloqueo > 3600_000) {
+    pausa = Math.max(base, Math.round(pausa * 0.9));
+  }
+  // La siguiente invocación no le pide antes de que se cumpla la pausa: así
+  // una pausa más larga que el minuto del cron también se respeta.
+  const espera = ultima ? Math.max(sitio.espera_hasta, ultima + pausa) : sitio.espera_hasta;
+  return { ...sitio, pausa_ms: pausa, espera_hasta: espera };
 }
 
 async function trabajarSitio(env, sitio, pedidas, fin, cambios) {
-  const base = SITIOS[sitio.host].pausa;
-  const cuenta = { host: sitio.host, descargadas: 0, fallidas: 0, bloqueos: 0, ya_estaban: 0 };
+  const cuenta = { host: sitio.host, descargadas: 0, fallidas: 0, bloqueos: 0, ya_estaban: 0, ultimo_exito: 0 };
+  let hechas = 0, ultima = 0;
   for (const p of pedidas) {
-    if (Date.now() + sitio.pausa_ms > fin) break;
+    const espera = esperaSiguiente({ hechas, ultima, pausa: sitio.pausa_ms, ahora: Date.now(), fin });
+    if (espera === null) break;
     // Lo que falta (prioridad 1) puede haber llegado por otra pedida o la siembra.
     if (p.prioridad > 0 && await env.ARCHIVO.head(clavePagina(p.clave))) {
       cambios.push(env.DB.prepare("DELETE FROM pedidas WHERE clave = ?").bind(p.clave));
       cuenta.ya_estaban++;
       continue;
     }
-    const t0 = Date.now();
+    await dormir(espera);
+    ultima = Date.now();
+    hechas++;
     const r = await descargar(env, p);
     if (r.estado === "guardada") {
       cambios.push(env.DB.prepare("DELETE FROM pedidas WHERE clave = ?").bind(p.clave));
-      sitio.bloqueos = 0;
+      Object.assign(sitio, trasGuardada(sitio));
       cuenta.descargadas++;
+      cuenta.ultimo_exito = Date.now();
     } else if (r.estado === "bloqueo") {
-      sitio.bloqueos++;
-      sitio.ultimo_bloqueo = Date.now();
-      sitio.espera_hasta = Date.now() + esperaBloqueo(sitio.bloqueos);
-      sitio.pausa_ms = Math.min(PAUSA_MAX, Math.round(sitio.pausa_ms * 1.25));
+      Object.assign(sitio, trasBloqueo(sitio, Date.now()));
       cuenta.bloqueos++;
       break;
     } else {
@@ -144,12 +188,9 @@ async function trabajarSitio(env, sitio, pedidas, fin, cambios) {
               Date.now() + 60_000 * 4 ** intentos, Date.now(), p.clave));
       if (definitiva) cuenta.fallidas++;
     }
-    await dormir(Math.max(0, sitio.pausa_ms - (Date.now() - t0)));
   }
-  // Sin bloqueos en la última hora, la pausa vuelve poco a poco a su mínimo.
-  if (sitio.pausa_ms > base && Date.now() - sitio.ultimo_bloqueo > 3600_000) {
-    sitio.pausa_ms = Math.max(base, Math.round(sitio.pausa_ms * 0.9));
-  }
+  Object.assign(sitio, trasRonda(sitio,
+    { descargadas: cuenta.descargadas, bloqueada: cuenta.bloqueos > 0, ultima }, Date.now()));
   cambios.push(env.DB.prepare(
     `UPDATE sitios SET pausa_ms = ?, bloqueos = ?, ultimo_bloqueo = ?, espera_hasta = ?,
      descargadas = descargadas + ? WHERE host = ?`)
@@ -180,6 +221,23 @@ async function ronda(env) {
   } finally {
     cambios.push(env.DB.prepare("UPDATE turno SET hasta = 0 WHERE id = 1"));
     await env.DB.batch(cambios);
+  }
+}
+
+// Cuándo bajó algo cada sitio por última vez, para /salud. Va aparte de la
+// ronda y sin tumbarla: la tabla se crea aquí porque el esquema de D1 no se
+// aplica al desplegar.
+const CREAR_EXITOS = "CREATE TABLE IF NOT EXISTS exitos (host TEXT PRIMARY KEY, ultimo INTEGER NOT NULL)";
+
+async function anotarExitos(env, cuentas) {
+  const exitos = cuentas.filter((c) => c.ultimo_exito);
+  if (!exitos.length) return;
+  try {
+    await env.DB.batch([env.DB.prepare(CREAR_EXITOS), ...exitos.map((c) => env.DB.prepare(
+      "INSERT INTO exitos (host, ultimo) VALUES (?, ?) ON CONFLICT (host) DO UPDATE SET ultimo = excluded.ultimo")
+      .bind(c.host, c.ultimo_exito))]);
+  } catch (e) {
+    console.error(`no se anotó el último éxito: ${String(e).slice(0, 300)}`);
   }
 }
 
@@ -235,6 +293,42 @@ async function estado(env) {
   return { sitios, colas };
 }
 
+const fecha = (ms) => (ms ? new Date(ms).toISOString().replace(/\.\d+Z$/, "Z") : null);
+
+// Lo que necesita quien vigila que el archivo avance: por sitio, su pausa, lo
+// que tiene pendiente, desde cuándo, y cuándo bajó algo por última vez.
+export function resumenSalud(sitios, colas, exitos, ahora) {
+  const de = (filas) => Object.fromEntries(filas.map((f) => [f.host, f]));
+  const [s, c, e] = [de(sitios), de(colas), de(exitos)];
+  return {
+    ahora: fecha(ahora),
+    sitios: Object.fromEntries(Object.keys(SITIOS).map((host) => [host, {
+      pausa_ms: s[host]?.pausa_ms ?? SITIOS[host].pausa,
+      pausa_base_ms: SITIOS[host].pausa,
+      bloqueos_seguidos: s[host]?.bloqueos ?? 0,
+      ultimo_bloqueo: fecha(s[host]?.ultimo_bloqueo),
+      en_espera_hasta: (s[host]?.espera_hasta ?? 0) > ahora ? fecha(s[host].espera_hasta) : null,
+      pendientes: c[host]?.n ?? 0,
+      pendiente_mas_antigua: fecha(c[host]?.creada),
+      ultimo_exito: fecha(e[host]?.ultimo),
+    }])),
+  };
+}
+
+async function salud(env) {
+  const sitios = (await env.DB.prepare("SELECT * FROM sitios").all()).results;
+  const colas = (await env.DB.prepare(
+    "SELECT host, count(*) AS n, min(creada) AS creada FROM pedidas WHERE estado = 'pendiente' GROUP BY host")
+    .all()).results;
+  let exitos = [];
+  try {
+    exitos = (await env.DB.prepare("SELECT host, ultimo FROM exitos").all()).results;
+  } catch {
+    // La tabla aparece con la primera descarga posterior al despliegue.
+  }
+  return resumenSalud(sitios, colas, exitos, Date.now());
+}
+
 // Siembra desde el caché de las corridas de Actions anteriores al archivo: una
 // página por petición, con el cuerpo tal cual (sin decodificar nada aquí). Solo
 // existe mientras el Worker tenga el secret SIEMBRA (se borra al terminar).
@@ -277,11 +371,14 @@ export default {
       }
     }
     if (url.pathname === "/estado") return json(await estado(env));
+    if (url.pathname === "/salud" && request.method === "GET") return json(await salud(env));
     return new Response("no encontrado\n", { status: 404 });
   },
 
   async scheduled(evento, env) {
-    for (const c of await ronda(env)) {
+    const cuentas = await ronda(env);
+    await anotarExitos(env, cuentas);
+    for (const c of cuentas) {
       if (c.descargadas || c.bloqueos || c.fallidas) console.log(JSON.stringify(c));
     }
   },

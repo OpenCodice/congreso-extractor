@@ -27,3 +27,6 @@ CREATE TABLE IF NOT EXISTS sitios (
 -- Una sola ronda del cron a la vez.
 CREATE TABLE IF NOT EXISTS turno (id INTEGER PRIMARY KEY, hasta INTEGER NOT NULL);
 INSERT OR IGNORE INTO turno (id, hasta) VALUES (1, 0);
+
+-- Última descarga lograda de cada sitio, para /salud (el Worker la crea si falta).
+CREATE TABLE IF NOT EXISTS exitos (host TEXT PRIMARY KEY, ultimo INTEGER NOT NULL);
