@@ -1,5 +1,5 @@
 name: Reparar parsers con el agente
-run-name: reparar-parsers
+run-name: "reparar-parsers run_id=[${{ inputs.run_id }}] origen=[${{ inputs.origen }}]"
 
 # Las páginas del Senado y la Gaceta que el parser no leyó en la última
 # actualización (artefacto `fallos`, ver congreso/lecturas.py) van a un agente
@@ -9,9 +9,10 @@ run-name: reparar-parsers
 # compuertas deterministas (scripts/agente/compuertas_reparar.py): rutas
 # permitidas, fixtures reales, pruebas nuevas y anteriores, sin regresiones
 # sobre el caché de descargas (scripts/regresion.py) y de acuerdo con las
-# lecturas verificadas. Solo entonces se publica en main y se relanza la
-# actualización, para que el parser reemplace a las lecturas del agente.
-# A mano: gh workflow run reparar-parsers.yml [-f run_id=…]
+# lecturas verificadas. Solo entonces se publica en main y se pide otra
+# actualización (la lanza el supervisor, OpenCodice/supervisor), para que el
+# parser reemplace a las lecturas del agente.
+# A mano (workflow_dispatch), `run_id` elige la corrida de la que salen los fallos.
 on:
   workflow_run:
     workflows: [Actualizar congreso-mexicano]
@@ -21,6 +22,10 @@ on:
       run_id:
         description: Corrida de actualizar-congreso.yml con los fallos (por omisión, la última terminada)
         required: false
+      origen:
+        description: 'Quién lanzó la corrida (supervisor); vacío = a mano'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -156,7 +161,8 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      actions: write
+    outputs:
+      pedir_actualizar: ${{ steps.pedir.outputs.pedir }}
     steps:
       # Este job no ejecuta código del agente: aplica el parche ya probado.
       - uses: actions/checkout@v5
@@ -179,11 +185,32 @@ jobs:
           EXTRACTOR_TOKEN: ${{ secrets.PR_TOKEN }}
           EXTRACTOR_SLUG: ${{ github.repository }}
         run: python3 scripts/agente/compuertas_reparar.py publicar --trabajo "$TRABAJO" --parche /tmp/agente/arreglo.patch
-      - name: Relanzar la actualización
-        # Con el parser corregido, la siguiente corrida lee esas páginas por
-        # código y su resultado reemplaza a las lecturas del agente. Una sola
-        # vez cada 12 h, para no encadenar corridas.
+      - name: Pedir la actualización
+        # Con el parser corregido, la siguiente corrida que publica lee esas
+        # páginas por código y su resultado reemplaza a las lecturas del
+        # agente. Un arreglo pide una sola vez cada 12 h (`relanzar`), para
+        # que una reparación tras otra no encadene publicaciones.
+        id: pedir
         if: steps.publicar.outputs.relanzar == 'true'
+        run: echo 'pedir={"workflow":"actualizar-congreso.yml","inputs":{"publicar":"si"}}' >> "$GITHUB_OUTPUT"
+
+  estado:
+    # El supervisor (OpenCodice/supervisor) lee el nombre de este job para saber si
+    # quedó otra tanda, y del artefacto `cadena`, el resultado de cada job y lo
+    # que piden (sus salidas `pedir*`).
+    name: "estado pendiente=[false]"
+    needs: [agente, compuertas, publicar]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Lo que declaró cada job
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run actualizar-congreso.yml -R "$GITHUB_REPOSITORY" --ref main -f origen=reparar
+          NEEDS: ${{ toJSON(needs) }}
+        run: printf '%s' "$NEEDS" > cadena.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cadena
+          path: cadena.json
+          retention-days: 14
