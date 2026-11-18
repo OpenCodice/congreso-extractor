@@ -131,9 +131,10 @@ jobs:
               print(f"- {e[:300]}")
           PY
           gh label create verificado -R OpenCodice/congreso-mexicano --force >/dev/null
+          gh label create automatico -R OpenCodice/congreso-mexicano --force >/dev/null
           url=$(gh pr create -R OpenCodice/congreso-mexicano --head "$rama" --base main \
             --title "Decretos ligados por resolución del agente ($(date -u +%Y-%m-%d))" \
-            --body-file ../../cuerpo.md --label verificado)
+            --body-file ../../cuerpo.md --label verificado --label automatico)
           echo "pr=${url##*/}" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         if: always()
