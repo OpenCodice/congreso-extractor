@@ -106,3 +106,10 @@ def test_votaciones_pendientes_de_descarga_no_se_retiran(tmp_path, monkeypatch):
     r = votaciones_senado.construir(tmp_path, 66)
     assert r["pendientes_de_descarga"] == 2 and r["retiradas_de_la_fuente"] == 0 and not r["errores"]
     assert "retirada_de_la_fuente" not in datos.leer(tmp_path, "votaciones/lxvi/senado/senado-1.json")
+
+
+def test_votacion_periodo_extraordinario_en_minusculas():
+    g = senado.votacion(leer("votacion_5113.html"))
+    assert g["fecha"] == "2026-05-28"
+    assert g["conteos"] == {"yes": 85, "no": 42, "abstain": 0}
+    assert g["motion"] == "VOTACIÓN EN LO GENERAL Y EN LO PARTICULAR"

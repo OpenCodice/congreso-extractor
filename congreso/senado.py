@@ -73,7 +73,8 @@ def listado(documento: str) -> list[dict]:
 
 def votacion(documento: str) -> dict:
     """Fecha, asunto, qué se vota y conteos de la página de una votación."""
-    cuerpo = documento[documento.find("PERIODO"):] if "PERIODO" in documento else documento
+    encabezado = re.search(r"PERIODO|Periodo EXTRAORDINARIO", documento)
+    cuerpo = documento[encabezado.start():] if encabezado else documento
     cuerpo = cuerpo[:cuerpo.find("Senador (a)")] if "Senador (a)" in cuerpo else cuerpo
     lineas = [l for l in _texto(re.sub(r"<!--|-->", " ", cuerpo), bloques=True).split("\n") if l]
     fecha = next((_fecha(l) for l in lineas if _fecha(l)), None)
