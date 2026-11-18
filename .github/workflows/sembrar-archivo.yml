@@ -1,14 +1,20 @@
 name: Sembrar el archivo
+run-name: "sembrar-archivo origen=[${{ inputs.origen }}]"
 
 # Sube al Worker congreso-archivo las páginas del caché de Actions (lo que
 # bajaron las corridas de antes del archivo, o para rehacerlo si se pierde). El
 # Worker solo acepta /sembrar mientras tenga el secret SIEMBRA:
 #   openssl rand -hex 32 | tee >(cd archivo && npx wrangler secret put SIEMBRA) \
 #     | gh secret set CONGRESO_SIEMBRA -R OpenCodice/congreso-extractor
-#   gh workflow run sembrar-archivo.yml
-# y al terminar se retira: npx wrangler secret delete SIEMBRA.
+# Se lanza a mano (workflow_dispatch) y al terminar se retira el secret:
+#   npx wrangler secret delete SIEMBRA
 on:
   workflow_dispatch:
+    inputs:
+      origen:
+        description: 'Quién lanzó la corrida (supervisor); vacío = a mano'
+        required: false
+        default: ''
 
 permissions:
   contents: read

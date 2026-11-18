@@ -1,4 +1,5 @@
 name: Sondear fuentes desde México
+run-name: "sondear-mx urls=[${{ inputs.urls }}] datos=[${{ inputs.datos }}] extractor=[${{ inputs.extractor }}] pausa=[${{ inputs.pausa }}] origen=[${{ inputs.origen }}]"
 
 # Descarga por egress-mx páginas del SITL, la Gaceta o el Senado y las deja
 # como artefacto, para escribir parsers y pruebas con fixtures reales.
@@ -19,6 +20,10 @@ on:
       pausa:
         description: Segundos entre peticiones con el cliente del extractor
         default: '3'
+      origen:
+        description: 'Quién lanzó la corrida (supervisor); vacío = a mano'
+        required: false
+        default: ''
 
 permissions:
   contents: read
