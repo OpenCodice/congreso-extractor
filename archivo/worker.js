@@ -258,8 +258,12 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const siembra = url.pathname.match(/^\/sembrar\/([0-9a-f]{64})$/);
-    if (siembra && request.method === "PUT") {
+    if (siembra && ["PUT", "HEAD"].includes(request.method)) {
       if (!autorizado(request, env.SIEMBRA)) return new Response("no autorizado\n", { status: 401 });
+      // HEAD: si ya está, la siembra no la vuelve a mandar.
+      if (request.method === "HEAD") {
+        return new Response(null, { status: await env.ARCHIVO.head(clavePagina(siembra[1])) ? 200 : 404 });
+      }
       return sembrar(env, request, siembra[1]);
     }
     if (!autorizado(request, env.TOKEN)) return new Response("no autorizado\n", { status: 401 });

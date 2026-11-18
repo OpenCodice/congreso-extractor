@@ -280,6 +280,17 @@ def sembrar(cache: Path, token: str) -> dict:
         texto = _texto_clave(m["url"], m.get("datos")) if "url" in m else ""
         if not texto or bloqueado(contenido) or hashlib.sha256(texto.encode()).hexdigest() != ruta.name:
             continue
+        vistas += 1
+        if vistas % 1000 == 0:
+            print(f"{vistas} páginas revisadas, {nuevas} nuevas", file=sys.stderr, flush=True)
+        try:
+            urllib.request.urlopen(urllib.request.Request(
+                f"{ARCHIVO}/sembrar/{ruta.name}", method="HEAD",
+                headers={"Authorization": f"Bearer {token}", "User-Agent": AGENTE}), timeout=60)
+            continue
+        except urllib.error.HTTPError as e:
+            if e.code != 404:
+                raise
         req = urllib.request.Request(f"{ARCHIVO}/sembrar/{ruta.name}", data=contenido, method="PUT", headers={
             "Authorization": f"Bearer {token}", "User-Agent": AGENTE, "X-Url": m["url"],
             "X-Texto": quote(texto, safe=""), "X-Consultado": m["consultado"],
@@ -293,5 +304,4 @@ def sembrar(cache: Path, token: str) -> dict:
                 if intento == 3:
                     raise
                 time.sleep(2 ** intento)
-        vistas += 1
     return {"paginas": vistas, "nuevas": nuevas}
