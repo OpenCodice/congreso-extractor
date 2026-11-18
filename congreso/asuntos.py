@@ -139,10 +139,15 @@ def construir(raiz: Path, legislatura: int, tipos: list[str] | None = None, hoy:
     resumen: dict[str, dict] = {}
     for tipo in tipos or list(TIPOS):
         carpeta = f"{TIPOS[tipo]}/{leg}"
-        vistos, escritos, errores, sin_mandato = set(), 0, [], 0
+        vistos, escritos, errores, sin_mandato, pendientes = set(), 0, [], 0, 0
+        for desde, hasta in meses(inicio, fin):
+            red.anticipar(sil.URL_BUSQUEDA_ASUNTOS, sil.formulario_asuntos(legislatura, tipo, _dmy(desde), _dmy(hasta)))
         for desde, hasta in meses(inicio, fin):
             try:
                 paginas = consultar(legislatura, tipo, desde, hasta)
+            except red.Pendiente:
+                pendientes += 1
+                continue
             except RuntimeError as e:
                 errores.append(str(e))
                 continue
@@ -169,10 +174,11 @@ def construir(raiz: Path, legislatura: int, tipos: list[str] | None = None, hoy:
                     escritos += 1
         retirados = 0
         # Solo con la legislatura completa leída se sabe qué dejó de listarse.
-        if not errores:
+        if not errores and not pendientes:
             for ruta in sorted((raiz / carpeta).glob("*.json")) if (raiz / carpeta).exists() else []:
                 if ruta.stem not in vistos:
                     retirados += datos.marcar_retirada(raiz, ruta.relative_to(raiz).as_posix())
         resumen[TIPOS[tipo]] = {"asuntos": len(vistos), "escritos": escritos, "retirados_de_la_fuente": retirados,
-                                "autores_sin_mandato": sin_mandato, "errores": errores}
+                                "autores_sin_mandato": sin_mandato, "pendientes_de_descarga": pendientes,
+                                "errores": errores}
     return resumen

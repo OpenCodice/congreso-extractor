@@ -277,9 +277,14 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     for f in filas:
         por_seguimiento.setdefault(f["seguimiento"], []).append(f)
 
-    errores, escritos = [], 0
+    errores, escritos, pendientes = [], 0, 0
     for seg, dictamenes in sorted(por_seguimiento.items()):
         principal = next((f for f in dictamenes if f["publicado_dof"]), dictamenes[0])
+        red.anticipar(sil.url_seguimiento(seg, principal["clave"]))
+        red.anticipar(sil.url_historial(seg, principal["clave"]))
+        for f in dictamenes:
+            red.anticipar(sil.url_tramites(f["clave"]))
+            red.anticipar(sil.url_detalle_votacion(f["clave"]))
         try:
             exp, copias = expediente(seg, principal)
             eventos = []
@@ -289,6 +294,11 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
                 copias += cp
                 exp["tramites"][f["clave"]] = tr
                 exp["votaciones_economicas"] += economicas(f, tr)
+        except red.Pendiente:
+            # Se escribe cuando el archivo tenga todas sus páginas; mientras, se
+            # queda como estaba (y sigue en la búsqueda: no cuenta como retirado).
+            pendientes += 1
+            continue
         except (Omitido, ValueError, KeyError) as e:
             errores.append(f"expediente {seg}: {e}")
             continue
@@ -322,5 +332,6 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
                 retiradas += datos.marcar_retirada(raiz, f"expedientes/{e['id']}.json")
                 for ruta in rutas:
                     datos.marcar_retirada(raiz, ruta.relative_to(raiz).as_posix())
-    return {"retirados_de_la_fuente": retiradas,"expedientes": len(por_seguimiento) - len(errores), "votaciones": escritos,
+    return {"retirados_de_la_fuente": retiradas, "expedientes": len(por_seguimiento) - len(errores) - pendientes,
+            "pendientes_de_descarga": pendientes, "votaciones": escritos,
             "omitidos": len(errores), "errores": errores, "busqueda": r.procedencia()}

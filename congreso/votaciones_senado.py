@@ -95,13 +95,14 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
         listado = [x for x in listado if x["clave"] in solo]
     eventos_sil = [e for e in datos.todos(raiz, f"votaciones/{leg}/senado") if e["id"].startswith("sil-")]
 
-    leidas, errores = [], []
+    leidas, errores, pendientes = [], [], 0
     inicio = time.monotonic()
     for i, x in enumerate(listado):
         if time.monotonic() - inicio > PRESUPUESTO * 60:
             errores.append(f"se agotaron los {PRESUPUESTO:g} min de descarga del Senado; quedan "
                            f"{len(listado) - i} votaciones para la siguiente corrida")
             break
+        red.anticipar(senado.url_tabla(x["clave"], legislatura))
         try:
             rv = red.obtener(senado.url_votacion(x["clave"], legislatura), vigencia_horas=VIGENCIA, bloqueos=ESPERAS)
             rt = red.obtener(senado.url_tabla(x["clave"], legislatura), vigencia_horas=VIGENCIA, bloqueos=ESPERAS)
@@ -113,14 +114,16 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
             errores.append(f"el sitio del Senado bloqueó las peticiones; quedan {len(listado) - i} "
                            f"votaciones para la siguiente corrida")
             break
+        except red.Pendiente:
+            pendientes += 1
         except (ValueError, RuntimeError, KeyError) as e:
             errores.append(f"senado {x['clave']}: {e}")
 
     errores += lecturas.AVISOS
     lecturas.AVISOS.clear()
     enlaces = cotejo.emparejar([v for v, _, _ in leidas], eventos_sil, "la votación del Senado")
-    return escribir(raiz, leg, "senado", leidas, enlaces, eventos_sil, evento, errores,
-                    {"listado": rl.procedencia()}, "senado-", vigentes)
+    return dict(escribir(raiz, leg, "senado", leidas, enlaces, eventos_sil, evento, errores,
+                         {"listado": rl.procedencia()}, "senado-", vigentes), pendientes_de_descarga=pendientes)
 
 
 def escribir(raiz: Path, leg: str, camara: str, leidas, enlaces, eventos_sil, hacer_evento, errores,

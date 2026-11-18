@@ -181,8 +181,15 @@ def construir(raiz: Path, repos: Path) -> dict:
 
     decretos: dict[int, dict] = {}
     sin_decreto = []
+    for _, fecha in pares:
+        red.anticipar(dof.url_sumario(fecha))
+    pendientes = 0
     for doc, fecha in sorted(pares):
-        r = red.obtener(dof.url_sumario(fecha), vigencia_horas=24 * 30)
+        try:
+            r = red.obtener(dof.url_sumario(fecha), vigencia_horas=24 * 30)
+        except red.Pendiente:
+            pendientes += 1
+            continue
         candidatos = dof.candidatos(dof.sumario(r.contenido, fecha), doc, nombres)
         if not candidatos:
             sin_decreto.append({"documento": doc, "publicacion": fecha})
@@ -223,6 +230,9 @@ def construir(raiz: Path, repos: Path) -> dict:
             try:
                 rs = red.obtener(sil.url_seguimiento(e["seguimiento"], dec["clave"]))
                 leg = legislaturas_aprobatorias(e, sil.seguimiento(sil.decodificar(rs.contenido))["aspectos_relevantes"])
+            except red.Pendiente:
+                pendientes += 1
+                continue
             except (RuntimeError, ValueError, KeyError) as ex:
                 errores.append(f"{d['id']}: {ex}")
                 continue
@@ -232,6 +242,10 @@ def construir(raiz: Path, repos: Path) -> dict:
             else:
                 errores.append(f"{d['id']}: la declaratoria {dec['clave']} no da una lista de congresos que cuadre")
 
+    # Con una página sin bajar, un decreto quedaría sin él o sin sus congresos:
+    # no se escribe nada hasta que el archivo las tenga todas.
+    if pendientes:
+        raise red.Pendiente(f"{pendientes} páginas del DOF o el SIL pendientes de descarga")
     for d in decretos.values():
         d["documentos"].sort(key=lambda x: (x["documento"], x["publicacion"]))
         datos.escribir(raiz, f"decretos/{d['fecha'][:4]}/{d['id']}.json", d)

@@ -34,7 +34,8 @@ env:
 
 jobs:
   agente:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion != 'skipped'
+    # Las corridas «solo pedir» (cada hora) no publican: no hay nada que reparar ni resolver.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion != 'skipped' && !endsWith(github.event.workflow_run.display_title, '(solo pedir)'))
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:

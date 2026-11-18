@@ -107,6 +107,8 @@ def construir(raiz: Path, legislatura: int, camara: str, perfiles: bool = True) 
             try:
                 rp = red.obtener(sil.url_perfil(f["referencia"]), vigencia_horas=24 * 6, bloqueos=(90,))
                 p = sil.perfil(sil.decodificar(rp.contenido))
+            except red.Pendiente:
+                pass
             except red.Bloqueado:
                 # El firewall del SIL corta tras muchas peticiones: el resto de los
                 # perfiles se queda como estaba y se reintenta en la siguiente corrida.

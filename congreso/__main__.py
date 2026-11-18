@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -62,10 +63,33 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("etapa", choices=["verificar"])
     a.add_argument("--fallos", type=Path, required=True)
 
+    a = sub.add_parser("archivo", help="siembra el archivo (Worker congreso-archivo) con una copia local")
+    a.add_argument("etapa", choices=["sembrar"])
+    a.add_argument("--cache", type=Path, required=True)
+
     a = sub.add_parser("validar")
     a.add_argument("--out", type=Path, required=True)
 
     args = p.parse_args(argv)
+    from . import red
+    try:
+        r = ejecutar(args)
+    except red.Pendiente as e:
+        # Falta una página de la que depende todo el paso (un listado, un
+        # buscador): no se escribe nada y se reintenta cuando el archivo la tenga.
+        r = {"pendiente": str(e), "errores": []}
+    finally:
+        pedidas = red.enviar_pedidas()
+        if pedidas:
+            print(f"{pedidas} páginas pedidas al archivo", file=sys.stderr)
+    if isinstance(r, int):
+        return r
+    # Un expediente omitido no es una falla: se anota y el resto se publica.
+    print(json.dumps(r, ensure_ascii=False, indent=2))
+    return 0
+
+
+def ejecutar(args):
     if args.orden == "padron":
         from . import padron
         r = padron.construir(args.out, args.legislatura, args.camara, perfiles=not args.sin_perfiles)
@@ -92,6 +116,9 @@ def main(argv: list[str] | None = None) -> int:
             r = residuos.para_juicio(args.out, args.trabajo)
         else:
             r = residuos.verificar(args.out, args.trabajo)
+    elif args.orden == "archivo":
+        from . import red
+        r = red.sembrar(args.cache, os.environ["CONGRESO_SIEMBRA"])
     elif args.orden == "lecturas":
         from . import lecturas
         r = lecturas.verificar_fallos(args.fallos)
@@ -102,9 +129,7 @@ def main(argv: list[str] | None = None) -> int:
             print(e)
         print(f"{len(errores)} errores")
         return 1 if errores else 0
-    # Un expediente omitido no es una falla: se anota y el resto se publica.
-    print(json.dumps(r, ensure_ascii=False, indent=2))
-    return 0
+    return r
 
 
 if __name__ == "__main__":

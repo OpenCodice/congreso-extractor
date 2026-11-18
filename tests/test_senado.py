@@ -90,3 +90,19 @@ def test_presupuesto_agotado_deja_el_resto_sin_retirar(tmp_path, monkeypatch):
     r = votaciones_senado.construir(tmp_path, 66)
     assert r["votaciones"] == 0 and r["retiradas_de_la_fuente"] == 0
     assert any("quedan 2 votaciones" in e for e in r["errores"])
+
+
+def test_votaciones_pendientes_de_descarga_no_se_retiran(tmp_path, monkeypatch):
+    from congreso import datos, red, senado, votaciones_senado
+    listado = senado.url_listado(66, "LXVI")
+
+    def obtener(url, *a, **k):
+        if url == listado:
+            return red.Respuesta(url, b"", "2026-11-18T00:00:00Z", "0")
+        raise red.Pendiente(url)
+    monkeypatch.setattr(red, "obtener", obtener)
+    monkeypatch.setattr(senado, "listado", lambda html: [{"clave": "1"}, {"clave": "2"}])
+    datos.escribir(tmp_path, "votaciones/lxvi/senado/senado-1.json", {"id": "senado-1"})
+    r = votaciones_senado.construir(tmp_path, 66)
+    assert r["pendientes_de_descarga"] == 2 and r["retiradas_de_la_fuente"] == 0 and not r["errores"]
+    assert "retirada_de_la_fuente" not in datos.leer(tmp_path, "votaciones/lxvi/senado/senado-1.json")

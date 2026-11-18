@@ -33,7 +33,10 @@ fuera de la biblioteca estándar de Python 3.12.
   `resoluciones/decretos/` (un lote por corrida; no se edita a mano).
   Los briefs y el lanzador, en `scripts/agente/`.
 - `red.py` — descargas con pausa, reintentos y caché en `.cache/` (no se
-  versiona); cada dato guarda URL, fecha de consulta y sha256.
+  versiona); cada dato guarda URL, fecha de consulta y sha256. Con
+  `CONGRESO_ARCHIVO`, lee del archivo en vez de la red (ver «Red»).
+- `archivo/` — el Worker `congreso-archivo`: archivo de páginas en R2 y
+  descargador perpetuo (su `README.md`).
 - `catalogos.py` — entidades (claves de `leyes-estatales`), partidos y cámaras.
 
 ## Comandos
@@ -58,8 +61,9 @@ los decretos, los expedientes. `decretos` lee los trailers de los repos de leyes
 
 ## Actualización
 
-`.github/workflows/actualizar-congreso.yml` corre los cuatro pasos, valida y
-abre en `congreso-mexicano` un PR `verificado` con un commit por tipo de dato
+`.github/workflows/actualizar-congreso.yml` corre los pasos leyendo del archivo
+(ver «Red»), valida y abre en `congreso-mexicano` un PR `verificado` con un
+commit por tipo de dato
 (`scripts/commits.py`: padrón, votaciones, asuntos, decretos y fuentes;
 trailer `Tipo`). El repo de datos no tiene workflows: su PR lo valida y
 fusiona `revisar-pr.yml` de este repo, que llaman `actualizar-congreso.yml` y
@@ -71,12 +75,20 @@ carpetas, sin merges). `fusionar`, con PR_TOKEN, lo fusiona con rebase atado a
 ese sha, solo si es de una rama `datos/` del mismo repo y trae `verificado`.
 main de congreso-mexicano exige PR, historial lineal y aplica a los admins: un
 cambio a mano (la documentación, `Tipo: indice`) también va por PR. Un
-expediente que no cuadra se anota en el PR; el resto se publica. Lo lanza el Worker
-`scheduler` de `constitucion-extractor` cada lunes a las 18:00 UTC, después de
-las vigilancias de leyes. Al fusionarse el PR, avisa a `constitucion-web`
-(`repository_dispatch` datos-actualizados) para que la web se regenere.
+expediente que no cuadra se anota en el PR; el resto se publica.
 
-Al terminar con éxito, `resolver-residuos.yml` lleva al agente lo que quedó
+Lo lanza el Worker `scheduler` de `constitucion-extractor` cada hora. Las
+corridas `publicar=no` («solo pedir», unos minutos) recorren todo para pedirle
+al archivo lo nuevo: una cadena de páginas (listado → votación → lista) se
+completa en unas horas. La de las 18:00 UTC (`publicar=si`, también la de a
+mano) además lee con el agente, abre el PR y, al fusionarse, avisa a
+`constitucion-web` (`repository_dispatch` datos-actualizados) para que la web
+se regenere. Lo que el archivo todavía no tiene no se publica ni cuenta como
+retirado: un expediente o una votación esperan completos (`pendientes_de_descarga`
+en el resumen del PR), y un paso que depende de una sola página (un listado,
+o los decretos, que necesitan todos sus sumarios) se queda como estaba.
+
+Al terminar con éxito una corrida que publica, `resolver-residuos.yml` lleva al agente lo que quedó
 sin ligar: uno propone el expediente con citas, `residuos para-juicio` deja
 pasar solo las propuestas cuyas citas están en su fuente (sin la nota del que
 propuso), y otro agente confirma o rechaza. El veredicto, confirmado o no, se
@@ -98,7 +110,7 @@ Hay dos rondas (en la Gaceta, la lista se pide con lo que dice la tabla).
 Cuando el parser ya lee una página con lectura, manda el parser y, si los dos
 difieren, se avisa en el PR.
 
-Al terminar cada actualización, `reparar-parsers.yml` toma su artefacto
+Al terminar cada actualización que publica, `reparar-parsers.yml` toma su artefacto
 `fallos` (las páginas del Senado y la Gaceta que el parser no leyó; ver
 `congreso/lecturas.py`) y, si hay, un agente (`scripts/agente/reparar.sh`,
 `brief-reparar.md`) corrige `senado.py`/`gaceta.py` (o, para un bloqueo nuevo,
@@ -121,22 +133,32 @@ revisión y con el árbol de trabajo, y sale con 1 si algo que se leía cambia:
 
 ## Red
 
-El SIL clásico (sil.gobernacion.gob.mx) y SIDOF responden desde cualquier
-país; el SIL limita a ~100 peticiones seguidas (`red.BLOQUEO`). El sitio del
-Senado y la Gaceta solo responden desde México: `red.VIA_MX` los pide por el
-Worker `egress-mx` de `constitucion-extractor` (GET y POST de formulario), con
-el secret `EGRESS_MX_TOKEN`, que solo existe en GitHub; en local esos dos
-pasos no corren. Para explorar páginas nuevas de esas fuentes:
-`gh workflow run sondear-mx.yml -f urls="…" [-f datos="…"]` deja lo
-descargado como artefacto. El SITL (sitl.diputados.gob.mx) responde 403 aun
-desde México.
+En CI nada se descarga de las fuentes: lo hace el Worker `congreso-archivo`
+(`archivo/`, ver su `README.md`), cada minuto y al ritmo de cada sitio, y lo
+guarda en R2. Con `CONGRESO_ARCHIVO` (su URL) y `CONGRESO_ARCHIVO_TOKEN`,
+`red.obtener` lee la página del archivo (y la guarda en `.cache/`, que queda
+como copia local). Si no está, la anota y lanza `red.Pendiente`: ese expediente
+o esa votación se omiten en esta corrida, sin error ni retiro. Si está pero es
+más vieja que su vigencia, se usa (su fecha de consulta es la real) y se pide
+otra, a lo más una vez al día. Al terminar cada comando, lo anotado se manda al
+archivo (`red.enviar_pedidas`). `red.anticipar` pide de una vez las páginas que
+se van a leer después (la tabla de una votación del Senado, los trámites de
+cada dictamen), para no esperar una vuelta por página. `sembrar-archivo.yml`
+sube al archivo una copia local (el caché de Actions).
 
-El Senado (Incapsula) bloquea si se le pide rápido: se le pide cada 12 s
-(`CONGRESO_PAUSA_SENADO`), ante un bloqueo se espera 2 y 10 min, y cada
-corrida descarga a lo más 120 min (`CONGRESO_PRESUPUESTO_SENADO`). Lo que
-falta queda anotado en `errores` y sigue en la siguiente corrida desde el
-caché, sin marcarse como retirado. Una respuesta cortada a medias
-(`IncompleteRead`) se reintenta como cualquier falla de red.
+Sin `CONGRESO_ARCHIVO` (en local), `red.obtener` descarga directo. El SIL
+clásico (sil.gobernacion.gob.mx) y SIDOF responden desde cualquier país salvo
+desde Cloudflare fuera de México; el SIL limita a ~100 peticiones seguidas
+(`red.BLOQUEOS`). El sitio del Senado y la Gaceta solo responden desde México:
+`red.VIA_MX` los pide por el Worker `egress-mx` de `constitucion-extractor`
+(GET y POST de formulario), con el secret `EGRESS_MX_TOKEN`, que solo existe en
+GitHub; en local esos dos pasos no corren. Para explorar páginas nuevas de esas
+fuentes: `gh workflow run sondear-mx.yml -f urls="…" [-f datos="…"]` deja lo
+descargado como artefacto. El SITL (sitl.diputados.gob.mx) responde 403 aun
+desde México. Al Senado (Incapsula) se le pide cada 12 s
+(`CONGRESO_PAUSA_SENADO`) y, ante un bloqueo, se espera 2 y 10 min; cada
+comando descarga a lo más 120 min de él (`CONGRESO_PRESUPUESTO_SENADO`). Una
+respuesta cortada a medias (`IncompleteRead`) se reintenta.
 
 ## Reglas
 

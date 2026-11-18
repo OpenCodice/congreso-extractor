@@ -1,0 +1,16 @@
+{
+  "name": "congreso-archivo",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  // Cada minuto baja lo pendiente de cada sitio (ver worker.js).
+  "triggers": { "crons": ["* * * * *"] },
+  "r2_buckets": [{ "binding": "ARCHIVO", "bucket_name": "congreso-archivo" }],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "congreso-archivo", "database_id": "8e344012-c707-4ed7-8cc3-dc03942f7004" }
+  ],
+  // El Senado y la Gaceta solo responden desde México: se piden por egress-mx.
+  "services": [{ "binding": "EGRESS", "service": "egress-mx" }],
+  "observability": { "enabled": true }
+}

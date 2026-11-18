@@ -60,7 +60,15 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     votaciones, errores = [], []
     completo = True
     for url in urls:
-        rp = red.obtener(url)
+        red.anticipar(url)
+    pendientes = 0
+    for url in urls:
+        try:
+            rp = red.obtener(url)
+        except red.Pendiente:
+            pendientes += 1
+            completo = False
+            continue
         del_periodo = gaceta.periodo(gaceta.decodificar(rp.contenido))
         if not del_periodo:
             # Un periodo publicado sin votaciones es una página que no se leyó bien.
@@ -85,6 +93,9 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
             usadas = [l for l in (lt, ll) if l]
             if usadas:
                 t = dict(t, lecturas=usadas)
+        except red.Pendiente:
+            pendientes += 1
+            continue
         except (ValueError, RuntimeError, KeyError) as e:
             errores.append(f"gaceta {clave}: {e}")
             continue
@@ -95,5 +106,5 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     errores += lecturas.AVISOS
     lecturas.AVISOS.clear()
     enlaces = cotejo.emparejar([v for v, _, _ in leidas], eventos_sil, "la votación de la Gaceta")
-    return escribir(raiz, leg, "diputados", leidas, enlaces, eventos_sil, evento, errores,
-                    {"indice": ri.procedencia()}, "gaceta-", vigentes)
+    return dict(escribir(raiz, leg, "diputados", leidas, enlaces, eventos_sil, evento, errores,
+                         {"indice": ri.procedencia()}, "gaceta-", vigentes), pendientes_de_descarga=pendientes)

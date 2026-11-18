@@ -1,14 +1,26 @@
 name: Actualizar congreso-mexicano
+run-name: Actualizar congreso-mexicano${{ inputs.publicar == 'no' && ' (solo pedir)' || '' }}
 
-# Padrón, votaciones y decretos de la legislatura en curso. Lo lanza el Worker
-# `scheduler` cada lunes, después de las vigilancias de leyes (los decretos se
-# enlazan con sus commits), o a mano: gh workflow run actualizar-congreso.yml
+# Padrón, votaciones, asuntos y decretos de la legislatura en curso, leídos del
+# archivo de páginas oficiales (el Worker congreso-archivo, `archivo/`), que las
+# descarga sin parar al ritmo de cada sitio. Aquí no se toca ninguna fuente:
+# lo que falta o ya está viejo se le pide al archivo al final de cada paso.
+#
+# El Worker `scheduler` la lanza cada hora: las corridas «solo pedir» recorren
+# todo para pedir lo nuevo (así una cadena de páginas se completa en horas) y
+# una al día publica (PR, lectura del agente). A mano:
+#   gh workflow run actualizar-congreso.yml [-f publicar=no]
 on:
   workflow_dispatch:
     inputs:
       legislatura:
         description: Número de legislatura
         default: '66'
+      publicar:
+        description: Abrir el PR (si) o solo pedir al archivo lo que falta (no)
+        type: choice
+        options: [si, 'no']
+        default: si
 
 permissions:
   contents: read
@@ -22,10 +34,10 @@ jobs:
     outputs:
       pr: ${{ steps.pr.outputs.pr }}
     runs-on: ubuntu-latest
-    # El límite de un runner es de 6 h; la primera corrida, sin caché, rondó las 5.
-    timeout-minutes: 355
+    timeout-minutes: 120
     env:
       LEG: ${{ inputs.legislatura || '66' }}
+      PUBLICAR: ${{ inputs.publicar || 'si' }}
       # Páginas que el parser no pudo leer: las lee el agente y, después,
       # reparar-parsers.yml corrige el parser (ver congreso/lecturas.py).
       CONGRESO_FALLOS: /tmp/fallos
@@ -37,9 +49,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      # Las votaciones del Senado y la Gaceta y los sumarios del DOF no cambian
-      # una vez publicados: con el caché de la corrida anterior no se descargan
-      # otra vez. Se guarda aun si la corrida falla o se cancela.
+      # Copia local del archivo: lo que ya se leyó no se vuelve a pedir al Worker.
       - uses: actions/cache/restore@v4
         with:
           path: .cache
@@ -51,61 +61,75 @@ jobs:
           git clone -q https://github.com/OpenCodice/congreso-mexicano.git ../repos/congreso-mexicano
       - name: Pruebas
         run: pip install -q pytest && python -m pytest -q
+      # El token del archivo solo llega a los pasos que leen de él, nunca al agente.
       - name: Padrón
+        env:
+          CONGRESO_ARCHIVO: &archivo https://congreso-archivo.danielcardeenas.workers.dev
+          CONGRESO_ARCHIVO_TOKEN: ${{ secrets.CONGRESO_ARCHIVO_TOKEN }}
         run: |
           python -m congreso padron --out ../repos/congreso-mexicano --legislatura "$LEG" --camara diputados
           python -m congreso padron --out ../repos/congreso-mexicano --legislatura "$LEG" --camara senado
       - name: Votaciones y expedientes
         # Un expediente que no cuadra se anota y se omite; el resto se publica.
+        env:
+          CONGRESO_ARCHIVO: *archivo
+          CONGRESO_ARCHIVO_TOKEN: ${{ secrets.CONGRESO_ARCHIVO_TOKEN }}
         run: python -m congreso votaciones --out ../repos/congreso-mexicano --legislatura "$LEG" > ../votaciones.json
-      - name: Votaciones del Senado
-        # Su sitio solo responde desde México; el token solo llega a este paso.
+      - name: Votaciones del Senado y de Diputados (Gaceta)
         env:
-          EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
-        run: python -m congreso senado --out ../repos/congreso-mexicano --legislatura "$LEG" > ../senado.json
-      - name: Votaciones de Diputados (Gaceta)
-        env:
-          EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
-        run: python -m congreso gaceta --out ../repos/congreso-mexicano --legislatura "$LEG" > ../gaceta.json
+          CONGRESO_ARCHIVO: *archivo
+          CONGRESO_ARCHIVO_TOKEN: ${{ secrets.CONGRESO_ARCHIVO_TOKEN }}
+        run: |
+          python -m congreso senado --out ../repos/congreso-mexicano --legislatura "$LEG" > ../senado.json
+          python -m congreso gaceta --out ../repos/congreso-mexicano --legislatura "$LEG" > ../gaceta.json
       # Lo que el parser no leyó lo lee el agente; su lectura solo se usa si pasa
       # la verificación determinista. Dos rondas: en la Gaceta, la lista se pide
       # con lo que dice la tabla, así que puede fallar después de leerse la tabla.
       - name: Agente — leer las páginas que el parser no entendió (1)
+        if: env.PUBLICAR == 'si'
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: bash scripts/agente/leer.sh
       - name: Verificar las lecturas (1)
+        if: env.PUBLICAR == 'si'
         run: python -m congreso lecturas verificar --fallos "$CONGRESO_FALLOS" | tee ../lecturas-1.json
       - name: Senado y Gaceta con las lecturas verificadas
+        if: env.PUBLICAR == 'si'
         env:
-          EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
-          # Lo nuevo del Senado ya se intentó arriba; aquí solo se relee el caché.
-          CONGRESO_PRESUPUESTO_SENADO: "15"
+          CONGRESO_ARCHIVO: *archivo
+          CONGRESO_ARCHIVO_TOKEN: ${{ secrets.CONGRESO_ARCHIVO_TOKEN }}
         run: |
-          # Solo si el agente aportó lecturas nuevas: lo demás ya está en el caché.
+          # Solo si el agente aportó lecturas nuevas.
           [ -n "$(git status --porcelain -- lecturas)" ] || exit 0
           python -m congreso senado --out ../repos/congreso-mexicano --legislatura "$LEG" > ../senado.json
           python -m congreso gaceta --out ../repos/congreso-mexicano --legislatura "$LEG" > ../gaceta.json
       - name: Agente — leer las páginas que el parser no entendió (2)
+        if: env.PUBLICAR == 'si'
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: bash scripts/agente/leer.sh
       - name: Verificar las lecturas (2)
+        if: env.PUBLICAR == 'si'
         run: python -m congreso lecturas verificar --fallos "$CONGRESO_FALLOS" | tee ../lecturas-2.json
       - name: Senado y Gaceta con las lecturas verificadas (2)
+        if: env.PUBLICAR == 'si'
         env:
-          EGRESS_MX_TOKEN: ${{ secrets.EGRESS_MX_TOKEN }}
-          # Lo nuevo del Senado ya se intentó arriba; aquí solo se relee el caché.
-          CONGRESO_PRESUPUESTO_SENADO: "15"
+          CONGRESO_ARCHIVO: *archivo
+          CONGRESO_ARCHIVO_TOKEN: ${{ secrets.CONGRESO_ARCHIVO_TOKEN }}
         run: |
           [ -n "$(git status --porcelain -- lecturas)" ] || exit 0
           python -m congreso senado --out ../repos/congreso-mexicano --legislatura "$LEG" > ../senado.json
           python -m congreso gaceta --out ../repos/congreso-mexicano --legislatura "$LEG" > ../gaceta.json
       - name: Iniciativas, proposiciones y dictámenes negativos
+        env:
+          CONGRESO_ARCHIVO: *archivo
+          CONGRESO_ARCHIVO_TOKEN: ${{ secrets.CONGRESO_ARCHIVO_TOKEN }}
         run: python -m congreso asuntos --out ../repos/congreso-mexicano --legislatura "$LEG" > ../asuntos.json
       - name: Decretos
-        # Los repos de leyes se clonan aquí, tras horas de descargas, para
-        # ligar cada decreto con los commits vigentes de su (Documento, Publicacion).
+        # Cada decreto se liga con los commits vigentes de su (Documento, Publicacion).
+        env:
+          CONGRESO_ARCHIVO: *archivo
+          CONGRESO_ARCHIVO_TOKEN: ${{ secrets.CONGRESO_ARCHIVO_TOKEN }}
         run: |
           for r in constitucion-mexicana leyes-federales fiscal-mexicano; do
             git clone -q --filter=blob:none "https://github.com/OpenCodice/$r.git" "../repos/$r"
@@ -120,12 +144,13 @@ jobs:
           key: descargas-${{ github.run_id }}
       # Para reparar-parsers.yml: cada página que el parser no leyó, leída o no por el agente.
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && env.PUBLICAR == 'si'
         with:
           name: fallos
           path: /tmp/fallos
           if-no-files-found: ignore
       - name: Publicar las lecturas en el extractor
+        if: env.PUBLICAR == 'si'
         env:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
         run: |
@@ -142,6 +167,7 @@ jobs:
           echo "::error::No se pudieron publicar las lecturas"; exit 1
       - name: Abrir PR
         id: pr
+        if: env.PUBLICAR == 'si'
         env:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
         run: |
@@ -158,24 +184,31 @@ jobs:
           fi
           git push -q origin "$rama"
           python - <<'PY' > ../../cuerpo.md
-          import json
-          v = json.load(open("../../votaciones.json")); d = json.load(open("../../decretos.json"))
-          s = json.load(open("../../senado.json")); g = json.load(open("../../gaceta.json"))
-          print(f"Expedientes: {v['expedientes']} · votaciones: {v['votaciones']} · omitidos: {v['omitidos']}")
-          print(f"Gaceta (Diputados): {g['votaciones']} votaciones · ligadas a un expediente: {g['ligadas']} · con par en el SIL: {g['con_par_sil']} · omitidas: {g['omitidas']}")
-          print(f"Senado: {s['votaciones']} votaciones · ligadas a un expediente: {s['ligadas']} · con par en el SIL: {s['con_par_sil']} · omitidas: {s['omitidas']}")
-          import os
+          import json, os
+          def leer(n):
+              return json.load(open(f"../../{n}.json"))
+          v, s, g, a, d = (leer(n) for n in ("votaciones", "senado", "gaceta", "asuntos", "decretos"))
+          def pendiente(x):
+              # Un paso entero quedó para después: le faltaba una página de la que depende todo.
+              return f"pendiente de descarga ({x['pendiente']})" if "pendiente" in x else None
+          print(pendiente(v) or f"Expedientes: {v['expedientes']} · votaciones: {v['votaciones']} · omitidos: {v['omitidos']} · esperando al archivo: {v['pendientes_de_descarga']}")
+          for nombre, x in (("Gaceta (Diputados)", g), ("Senado", s)):
+              print(f"{nombre}: " + (pendiente(x) or f"{x['votaciones']} votaciones · ligadas a un expediente: {x['ligadas']} · con par en el SIL: {x['con_par_sil']} · omitidas: {x['omitidas']} · esperando al archivo: {x['pendientes_de_descarga']}"))
           for n in (1, 2):
               if os.path.exists(f"../../lecturas-{n}.json"):
-                  l = json.load(open(f"../../lecturas-{n}.json"))
+                  l = leer(f"lecturas-{n}")
                   print(f"Lecturas del agente (ronda {n}): aceptadas {len(l['aceptadas'])} · rechazadas {len(l['rechazadas'])} · sin propuesta {l['sin_propuesta']}")
                   for x in l["rechazadas"][:10]:
                       print(f"- {x[:300]}")
-          a = json.load(open("../../asuntos.json"))
-          for k, x in a.items():
-              print(f"{k}: {x['asuntos']} · cambiados: {x['escritos']} · retirados de la fuente: {x['retirados_de_la_fuente']} · autores sin mandato: {x['autores_sin_mandato']}")
-          print(f"Decretos: {d['decretos']} · con expediente: {d['con_expediente']} · ambiguos: {d['ambiguos']} · sin decreto: {d['sin_decreto']}")
-          for e in (v["errores"] + s["errores"] + g["errores"] + [x for k in a.values() for x in k["errores"]] + d["avisos"])[:80]:
+          if "pendiente" in a:
+              print(f"Asuntos: {pendiente(a)}")
+          else:
+              for k, x in a.items():
+                  print(f"{k}: {x['asuntos']} · cambiados: {x['escritos']} · retirados de la fuente: {x['retirados_de_la_fuente']} · autores sin mandato: {x['autores_sin_mandato']} · meses esperando al archivo: {x['pendientes_de_descarga']}")
+          print("Decretos: " + (pendiente(d) or f"{d['decretos']} · con expediente: {d['con_expediente']} · ambiguos: {d['ambiguos']} · sin decreto: {d['sin_decreto']}"))
+          errores = v["errores"] + s["errores"] + g["errores"] + d.get("avisos", [])
+          errores += [] if "pendiente" in a else [e for x in a.values() for e in x["errores"]]
+          for e in errores[:80]:
               print(f"- {e[:300]}")
           PY
           gh label create verificado -R OpenCodice/congreso-mexicano --force >/dev/null

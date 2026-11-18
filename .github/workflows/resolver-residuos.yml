@@ -22,7 +22,8 @@ jobs:
   resolver:
     outputs:
       pr: ${{ steps.pr.outputs.pr }}
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # Las corridas «solo pedir» (cada hora) no publican: no hay nada que reparar ni resolver.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && !endsWith(github.event.workflow_run.display_title, '(solo pedir)'))
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
