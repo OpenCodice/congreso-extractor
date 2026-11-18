@@ -48,8 +48,9 @@ RAIZ = Path(__file__).resolve().parent.parent.parent
 PARSERS = ("congreso/senado.py", "congreso/gaceta.py")
 PERMITIDO = re.compile(r"congreso/(?:senado|gaceta|red)\.py|tests/[A-Za-z0-9_.\-/]+")
 PREFIJO = "Reparación automática de parsers"
-AUTOR = {"GIT_AUTHOR_NAME": "opencodice-ci", "GIT_AUTHOR_EMAIL": "opencodice-ci@users.noreply.github.com",
-         "GIT_COMMITTER_NAME": "opencodice-ci", "GIT_COMMITTER_EMAIL": "opencodice-ci@users.noreply.github.com"}
+# Los arreglos que escribe el agente llevan su autoría, no la de una persona.
+AUTOR = {"GIT_AUTHOR_NAME": "Claude (agente OpenCodice)", "GIT_AUTHOR_EMAIL": "noreply@anthropic.com",
+         "GIT_COMMITTER_NAME": "Claude (agente OpenCodice)", "GIT_COMMITTER_EMAIL": "noreply@anthropic.com"}
 
 
 # Archivos de comandos del runner: el código del agente (pruebas, parsers) corre
