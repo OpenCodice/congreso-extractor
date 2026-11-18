@@ -1,5 +1,5 @@
 name: Actualizar congreso-mexicano
-run-name: Actualizar congreso-mexicano${{ inputs.publicar == 'no' && ' (solo pedir)' || '' }}
+run-name: "actualizar-congreso legislatura=[${{ inputs.legislatura }}] publicar=[${{ inputs.publicar }}] origen=[${{ inputs.origen }}]"
 
 # Padrón, votaciones, asuntos y decretos de la legislatura en curso, leídos del
 # archivo de páginas oficiales (el Worker congreso-archivo, `archivo/`), que las
@@ -10,6 +10,9 @@ run-name: Actualizar congreso-mexicano${{ inputs.publicar == 'no' && ' (solo ped
 # todo para pedir lo nuevo (así una cadena de páginas se completa en horas) y
 # una al día publica (PR, lectura del agente). A mano:
 #   gh workflow run actualizar-congreso.yml [-f publicar=no]
+#
+# El título de la corrida (`run-name`) lleva sus inputs: la API no los devuelve,
+# y de ahí los leen reparar-parsers.yml, resolver-residuos.yml y el supervisor.
 on:
   workflow_dispatch:
     inputs:
@@ -21,6 +24,10 @@ on:
         type: choice
         options: [si, 'no']
         default: si
+      origen:
+        description: 'Quién lanzó la corrida (scheduler, supervisor, continuar, reparar, ronda, salud); vacío = a mano'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -241,3 +248,13 @@ jobs:
             sleep $((intento * 30))
           done
           echo "::warning::No se pudo avisar a la web; se actualizará en su próximo despliegue."
+
+  estado:
+    # El supervisor (OpenCodice/supervisor) lee el nombre de este job para saber si quedó trabajo pendiente.
+    name: "estado pendiente=[false]"
+    needs: [actualizar, revisar, avisar-web]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: 'true'

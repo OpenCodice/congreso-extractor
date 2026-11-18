@@ -1,4 +1,5 @@
 name: Resolver residuos con el agente
+run-name: resolver-residuos
 
 # Decretos que `decretos` no ligó a su expediente: un agente propone con citas,
 # el código verifica las citas, otro agente juzga (ver congreso/residuos.py).
@@ -22,8 +23,9 @@ jobs:
   resolver:
     outputs:
       pr: ${{ steps.pr.outputs.pr }}
-    # Las corridas «solo pedir» (cada hora) no publican: no hay nada que reparar ni resolver.
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && !endsWith(github.event.workflow_run.display_title, '(solo pedir)'))
+    # Solo tras una corrida que publica (su título lleva `publicar=[si]`) y
+    # terminó bien: las «solo pedir» de cada hora no dejan nada que resolver.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.display_title, ' publicar=[si] '))
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -45,7 +47,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
         run: |
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             n=$(gh pr list -R OpenCodice/congreso-mexicano --state open --json number -q length)
             [ "$n" = "0" ] && exit 0
             sleep 30

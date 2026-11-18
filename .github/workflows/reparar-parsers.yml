@@ -1,4 +1,5 @@
 name: Reparar parsers con el agente
+run-name: reparar-parsers
 
 # Las páginas del Senado y la Gaceta que el parser no leyó en la última
 # actualización (artefacto `fallos`, ver congreso/lecturas.py) van a un agente
@@ -34,8 +35,9 @@ env:
 
 jobs:
   agente:
-    # Las corridas «solo pedir» (cada hora) no publican: no hay nada que reparar ni resolver.
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion != 'skipped' && !endsWith(github.event.workflow_run.display_title, '(solo pedir)'))
+    # Solo tras una corrida que publica (su título lleva `publicar=[si]`): las
+    # «solo pedir» de cada hora no dejan nada que reparar.
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion != 'skipped' && contains(github.event.workflow_run.display_title, ' publicar=[si] '))
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -69,7 +71,7 @@ jobs:
           gh run download "$run" -R "$GITHUB_REPOSITORY" -n fallos -D "$FALLOS" 2>/dev/null || true
           if ls "$FALLOS"/*/fallo.json > /dev/null 2>&1; then
             echo "hay=true" >> "$GITHUB_OUTPUT"
-            echo "Fallos de la corrida $run: $(ls -d "$FALLOS"/*/ | wc -l)"
+            echo "Fallos de la corrida $run: $(find "$FALLOS" -mindepth 2 -maxdepth 2 -name fallo.json | wc -l)"
           else
             echo "hay=false" >> "$GITHUB_OUTPUT"
             echo "La corrida $run no dejó fallos: nada que reparar."
@@ -184,4 +186,4 @@ jobs:
         if: steps.publicar.outputs.relanzar == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run actualizar-congreso.yml -R "$GITHUB_REPOSITORY" --ref main
+        run: gh workflow run actualizar-congreso.yml -R "$GITHUB_REPOSITORY" --ref main -f origen=reparar
