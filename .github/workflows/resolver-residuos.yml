@@ -15,8 +15,14 @@ on:
 permissions:
   contents: read
 
+# Comparte grupo con las actualizaciones que publican: las dos abren un PR en
+# congreso-mexicano desde su main y tienen que ir de una en una. Pero este
+# workflow se dispara tras cada actualización, también las de cada hora que no
+# publican, y una corrida que se va a saltar no debe ocupar el único lugar de
+# espera del grupo (cancelaría a la que publica): esa va a un grupo propio. La
+# condición es la misma que el `if` del job `resolver`.
 concurrency:
-  group: actualizar-congreso
+  group: ${{ (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && contains(github.event.workflow_run.display_title, ' publicar=[si] '))) && 'actualizar-congreso' || format('resolver-residuos-omitida-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:

@@ -32,8 +32,12 @@ on:
 permissions:
   contents: read
 
+# Las corridas que publican van de una en una, también con resolver-residuos.yml
+# (mismo grupo): las dos abren un PR en congreso-mexicano desde su main. Las
+# «solo pedir» no escriben en ningún repo y llegan cada hora: en su propio
+# grupo no le quitan el lugar de espera a una que publica.
 concurrency:
-  group: actualizar-congreso
+  group: actualizar-congreso${{ inputs.publicar == 'no' && '-pedir' || '' }}
   cancel-in-progress: false
 
 jobs:
