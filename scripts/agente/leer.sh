@@ -9,6 +9,7 @@
 set -euo pipefail
 
 EXTRACTOR="$(cd "$(dirname "$0")/../.." && pwd)"
+mkdir -p "$CONGRESO_FALLOS"
 pendientes=$(find "$CONGRESO_FALLOS" -name fallo.json 2>/dev/null | while read -r f; do
   [ -f "$(dirname "$f")/propuesta.json" ] || echo "$f"; done | wc -l | tr -d ' ')
 if [ "$pendientes" = 0 ]; then
