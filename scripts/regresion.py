@@ -144,7 +144,8 @@ def extraer(repo: Path, revision: str, destino: Path) -> str:
 
 
 def leer_con(raiz: Path, paginas: list[dict]) -> dict:
-    entrada = [{k: p[k] for k in ("id", "ruta", "fuente", "tipo")} for p in paginas]
+    # El lector corre con cwd en `raiz`: una ruta relativa (`--cache .cache`) no se encontraría desde ahí.
+    entrada = [dict({k: p[k] for k in ("id", "fuente", "tipo")}, ruta=str(Path(p["ruta"]).resolve())) for p in paginas]
     r = subprocess.run([sys.executable, "-I", "-c", _LECTOR, str(raiz)], input=json.dumps(entrada),
                        capture_output=True, text=True, timeout=LIMITE_SEGUNDOS, cwd=raiz)
     if r.returncode != 0:

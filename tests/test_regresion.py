@@ -98,6 +98,12 @@ def test_sin_cambios_no_hay_regresion_y_el_cli_sale_en_cero(repo, tmp_path):
     assert regresion.main(["--cache", str(cache), "--repo", str(repo), "--salida", str(salida)]) == 1
 
 
+def test_cache_con_ruta_relativa(repo, tmp_path, monkeypatch):
+    guardar(tmp_path / "cache", "https://www.senado.gob.mx/66/votacion/1", b"VOTOS 10")
+    monkeypatch.chdir(tmp_path)
+    assert correr(repo, Path("cache"))["iguales"] == 1
+
+
 def test_un_parser_que_ya_no_lee_y_un_bloqueo_nuevo_son_regresiones(repo, tmp_path):
     cache = tmp_path / "cache"
     guardar(cache, "https://www.senado.gob.mx/66/votacion/1", b"VOTOS 10")
