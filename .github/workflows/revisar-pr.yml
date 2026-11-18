@@ -37,6 +37,7 @@ permissions:
 jobs:
   validar:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     outputs:
       sha: ${{ steps.validar.outputs.sha }}
     steps:
@@ -58,6 +59,7 @@ jobs:
     needs: validar
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Fusionar si quedó validado y es de datos
         env:

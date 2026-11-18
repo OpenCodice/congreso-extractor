@@ -244,6 +244,7 @@ jobs:
   avisar-web:
     needs: revisar
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - env:
           GH_TOKEN: ${{ secrets.PR_TOKEN }}
@@ -260,6 +261,7 @@ jobs:
     needs: [actualizar, revisar, avisar-web]
     if: ${{ always() }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions: {}
     steps:
       - run: 'true'
