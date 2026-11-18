@@ -6,10 +6,12 @@ run-name: "actualizar-congreso legislatura=[${{ inputs.legislatura }}] publicar=
 # descarga sin parar al ritmo de cada sitio. Aquí no se toca ninguna fuente:
 # lo que falta o ya está viejo se le pide al archivo al final de cada paso.
 #
-# El Worker `scheduler` la lanza cada hora: las corridas «solo pedir» recorren
-# todo para pedir lo nuevo (así una cadena de páginas se completa en horas) y
-# una al día publica (PR, lectura del agente). A mano:
-#   gh workflow run actualizar-congreso.yml [-f publicar=no]
+# La lanza el supervisor (OpenCodice/supervisor) cada hora: las corridas «solo
+# pedir» recorren todo para pedir lo nuevo (así una cadena de páginas se
+# completa en horas) y una al día publica (PR, lectura del agente). Ningún
+# paso lanza otra corrida ni avisa a la web: el supervisor relanza lo que
+# falla y despliega constitucion-web cuando congreso-mexicano avanza. A mano
+# (workflow_dispatch), `publicar=no` hace una «solo pedir».
 #
 # El título de la corrida (`run-name`) lleva sus inputs: la API no los devuelve,
 # y de ahí los leen reparar-parsers.yml, resolver-residuos.yml y el supervisor.
@@ -25,7 +27,7 @@ on:
         options: [si, 'no']
         default: si
       origen:
-        description: 'Quién lanzó la corrida (scheduler, supervisor, continuar, reparar, ronda, salud); vacío = a mano'
+        description: 'Quién lanzó la corrida (supervisor); vacío = a mano'
         required: false
         default: ''
 
@@ -239,29 +241,23 @@ jobs:
     secrets:
       PR_TOKEN: ${{ secrets.PR_TOKEN }}
 
-  # La web se genera de los datos fusionados: con el PR ya en main, se pide un
-  # despliegue de constitucion-web (deploy.yml).
-  avisar-web:
-    needs: revisar
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - env:
-          GH_TOKEN: ${{ secrets.PR_TOKEN }}
-        run: |
-          for intento in 1 2 3; do
-            gh api repos/OpenCodice/constitucion-web/dispatches -f event_type=datos-actualizados && exit 0
-            sleep $((intento * 30))
-          done
-          echo "::warning::No se pudo avisar a la web; se actualizará en su próximo despliegue."
-
   estado:
-    # El supervisor (OpenCodice/supervisor) lee el nombre de este job para saber si quedó trabajo pendiente.
+    # El supervisor (OpenCodice/supervisor) lee el nombre de este job para saber si
+    # quedó otra tanda, y del artefacto `cadena`, el resultado y las salidas de
+    # cada job.
     name: "estado pendiente=[false]"
-    needs: [actualizar, revisar, avisar-web]
+    needs: [actualizar, revisar]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
     steps:
-      - run: 'true'
+      - name: Lo que declaró cada job
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: printf '%s' "$NEEDS" > cadena.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cadena
+          path: cadena.json
+          retention-days: 14

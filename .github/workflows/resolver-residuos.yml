@@ -1,16 +1,21 @@
 name: Resolver residuos con el agente
-run-name: resolver-residuos
+run-name: "resolver-residuos origen=[${{ inputs.origen }}]"
 
 # Decretos que `decretos` no ligó a su expediente: un agente propone con citas,
 # el código verifica las citas, otro agente juzga (ver congreso/residuos.py).
 # Lo confirmado y lo rechazado se registran en `resoluciones/` de este repo, y
 # los decretos se regeneran con ese registro en un PR a congreso-mexicano. Corre
-# al terminar cada actualización, o a mano: gh workflow run resolver-residuos.yml
+# al terminar cada actualización, o a mano (workflow_dispatch).
 on:
   workflow_run:
     workflows: [Actualizar congreso-mexicano]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      origen:
+        description: 'Quién lanzó la corrida (supervisor); vacío = a mano'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -153,18 +158,23 @@ jobs:
     secrets:
       PR_TOKEN: ${{ secrets.PR_TOKEN }}
 
-  # La web se genera de los datos fusionados: con el PR ya en main, se pide un
-  # despliegue de constitucion-web (deploy.yml).
-  avisar-web:
-    needs: revisar
+  estado:
+    # El supervisor (OpenCodice/supervisor) lee el nombre de este job para saber si
+    # quedó otra tanda, y del artefacto `cadena`, el resultado y las salidas de
+    # cada job.
+    name: "estado pendiente=[false]"
+    needs: [resolver, revisar]
+    if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    permissions: {}
     steps:
-      - env:
-          GH_TOKEN: ${{ secrets.PR_TOKEN }}
-        run: |
-          for intento in 1 2 3; do
-            gh api repos/OpenCodice/constitucion-web/dispatches -f event_type=datos-actualizados && exit 0
-            sleep $((intento * 30))
-          done
-          echo "::warning::No se pudo avisar a la web; se actualizará en su próximo despliegue."
+      - name: Lo que declaró cada job
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: printf '%s' "$NEEDS" > cadena.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cadena
+          path: cadena.json
+          retention-days: 14
