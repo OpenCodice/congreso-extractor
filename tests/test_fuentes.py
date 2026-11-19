@@ -105,6 +105,8 @@ def test_legislaturas_en_cada_forma_del_sil():
     # Número en una oración y lista en la siguiente; Jalisco votó en contra y no se cuenta.
     n, claves = decretos.votos_aprobatorios(_aspectos("4773522"))
     assert n == 23 and "jalisco" not in claves and "chiapas" not in claves
+    assert decretos.votos_no_aprobatorios(_aspectos("4773522")) == ["jalisco"]
+    assert decretos.votos_no_aprobatorios(_aspectos("4777744")) == []
     # «oficios de los Congresos de los estados de …, con los que remiten su voto aprobatorio»
     assert decretos.votos_aprobatorios(_aspectos("4777744"))[0] == 26
     # «el voto aprobatorio de veintidós congresos …»
@@ -205,3 +207,16 @@ def test_nombre_sin_mandato_se_declara_con_su_nombre():
     salida, sin_ligar, inconsistencias = votaciones.atribuir(v, indice, {"senado"})
     assert len(salida) == len(v) - 1 and inconsistencias == []
     assert sin_ligar == [{"grupo": v[0]["partido"], "opcion": v[0]["opcion"], "nombre": v[0]["fuente_nombre"]}]
+
+
+def test_legislaturas_que_votaron_en_contra():
+    leg, aviso = decretos.legislaturas_aprobatorias([(_dec("4773522"), _aspectos("4773522"))])
+    assert aviso is None and leg["no_aprobaron"] == ["jalisco"] and leg["asuntos_no_aprobaron"] == ["4773522"]
+    assert "votaron en contra" in leg["nota"]
+    sin = decretos.legislaturas_aprobatorias([(_dec("4777744"), _aspectos("4777744"))])[0]
+    assert "no_aprobaron" not in sin, "el silencio no es voto en contra"
+    contradiccion = ("Se realiza declaratoria con el escrutinio de dos votos aprobatorios remitidos por los congresos de "
+                     "Jalisco y Sonora. Asimismo, se informa la recepción del oficio del Congreso de Jalisco que remite "
+                     "voto no aprobatorio al proyecto.")
+    leg, aviso = decretos.legislaturas_aprobatorias([(_dec("1"), contradiccion)])
+    assert "no_aprobaron" not in leg and "no aprobatorio" in aviso

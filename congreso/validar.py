@@ -191,9 +191,12 @@ def validar(raiz: Path) -> list[str]:
         for c in dec.get("candidatos_expediente", []):
             if c["id"] not in expedientes:
                 errores.append(f"{d}: candidato {c['id']} no existe")
-        for clave in dec.get("legislaturas_estatales", {}).get("aprobaron", []):
+        leg = dec.get("legislaturas_estatales", {})
+        for clave in leg.get("aprobaron", []) + leg.get("no_aprobaron", []):
             if f"congreso-{clave}" not in orgs:
                 errores.append(f"{d}: congreso-{clave} no existe")
+        if set(leg.get("aprobaron", [])) & set(leg.get("no_aprobaron", [])):
+            errores.append(f"{d}: un congreso aprobó y no aprobó a la vez")
         fuentes(dec, d)
     for eid, n in ligados.items():
         if n > 1:

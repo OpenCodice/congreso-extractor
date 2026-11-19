@@ -176,6 +176,21 @@ def votos_aprobatorios(texto: str | None) -> tuple[int, list[str]] | None:
     return None
 
 
+# «Asimismo, se informa la recepción del oficio del Congreso de Jalisco que
+# remite voto no aprobatorio al proyecto…»: el SIL a veces dice quién votó en
+# contra. Solo eso se registra como en contra; el silencio no.
+_NO_APROBATORIO = re.compile(r"\bvotos? no aprobatorios?\b")
+
+
+def votos_no_aprobatorios(texto: str | None) -> list[str]:
+    """Claves de los congresos que, según el texto, remitieron voto no aprobatorio."""
+    claves = set()
+    for o in _oraciones(texto or ""):
+        if _NO_APROBATORIO.search(o):
+            claves |= set(entidades_en(_FIN_LISTA.sub("", o)))
+    return sorted(claves)
+
+
 def legislaturas_aprobatorias(declaratorias: list[tuple[dict, str | None]]) -> tuple[dict | None, str | None]:
     """Congresos locales que aprobaron una reforma constitucional (art. 135),
     según el SIL, de los asuntos «Declaratoria de reforma constitucional» del
@@ -183,8 +198,10 @@ def legislaturas_aprobatorias(declaratorias: list[tuple[dict, str | None]]) -> t
 
     Cada cámara da cuenta de los votos que le llegaron, a veces en días
     distintos: se toma la lista más larga, solo si las demás están contenidas
-    en ella; si dos listas se contradicen, ninguna. Devuelve también un aviso
-    cuando ninguna cuadra o se contradicen."""
+    en ella; si dos listas se contradicen, ninguna. Los que alguna declaratoria
+    dice que votaron en contra van en `no_aprobaron`, si no están también entre
+    los que aprobaron. Devuelve también un aviso cuando ninguna cuadra o se
+    contradicen."""
     leidas = []
     for asunto, texto in declaratorias:
         r = votos_aprobatorios(texto)
@@ -198,10 +215,22 @@ def legislaturas_aprobatorias(declaratorias: list[tuple[dict, str | None]]) -> t
                                                    "congresos" in (x[0].get("denominacion") or "").lower()))
     if any(not set(c) <= set(claves) for _, _, c in leidas):
         return None, "las declaratorias dan listas de congresos que se contradicen"
-    return {"aprobaron": claves, "votos_aprobatorios": n, "asunto": asunto["clave"],
-            "fecha": asunto["fecha"],
-            "fuente": "aspectos relevantes de la declaratoria en el SIL",
-            "nota": "el SIL solo lista los congresos con voto aprobatorio; el resto no tiene registro"}, None
+    leg = {"aprobaron": claves, "votos_aprobatorios": n, "asunto": asunto["clave"],
+           "fecha": asunto["fecha"],
+           "fuente": "aspectos relevantes de la declaratoria en el SIL",
+           "nota": "el SIL solo lista los congresos con voto aprobatorio; el resto no tiene registro"}
+    contra = {}
+    for a, texto in declaratorias:
+        for clave in votos_no_aprobatorios(texto):
+            contra.setdefault(clave, a["clave"])
+    if set(contra) & set(claves):
+        return leg, "una declaratoria da como no aprobatorio el voto de un congreso que otra cuenta como aprobatorio"
+    if contra:
+        leg["no_aprobaron"] = sorted(contra)
+        leg["asuntos_no_aprobaron"] = sorted(set(contra.values()))
+        leg["nota"] = ("el SIL lista los congresos con voto aprobatorio y, cuando lo dice, los que votaron en contra; "
+                       "el resto no tiene registro")
+    return leg, None
 
 
 def _emparejar(decretos_dia: list[dict], expedientes: list[dict], nombres: dict[str, str]) -> None:
@@ -300,9 +329,9 @@ def construir(raiz: Path, repos: Path) -> dict:
                 continue
             leg, aviso = legislaturas_aprobatorias(leidas)
             if leg:
-                leg["sources"] = [fuentes[leg["asunto"]]]
+                leg["sources"] = [fuentes[c] for c in dict.fromkeys([leg["asunto"], *leg.get("asuntos_no_aprobaron", [])])]
                 d["legislaturas_estatales"] = leg
-            else:
+            if aviso:
                 errores.append(f"{d['id']}: {aviso}")
 
     # Con una página sin bajar, un decreto quedaría sin él o sin sus congresos:
