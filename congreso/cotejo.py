@@ -6,13 +6,16 @@ a la votación del SIL cuando el par es inequívoco:
 1. misma fecha, y la denominación del asunto en el SIL contenida en el título
    de la fuente, con un único mejor candidato;
 2. la fuente tiene para ese asunto tantas votaciones como el SIL trámites
-   nominales: se emparejan en orden.
+   nominales: se emparejan en orden. Si no, se cuentan sin las mociones
+   (suspensivas, de discusión) que el SIL registra como nominales y las otras
+   fuentes no publican; si así coinciden, se emparejan en orden sin ellas.
 
 Si las dos fuentes difieren (conteos o votos individuales), ambas se
 conservan y la diferencia queda en `discrepancias`.
 """
 from __future__ import annotations
 
+import re
 from collections import Counter
 
 from . import catalogos, red
@@ -20,6 +23,16 @@ from .decretos import _palabras
 
 UMBRAL = 0.7
 MARGEN = 0.15
+
+# «Se rechazó admitir la moción suspensiva…», «Se rechazó ponerse a discusión
+# la propuesta de moción…»: votaciones de trámite, no del dictamen.
+MOCION = re.compile(r"\bmoci[oó]n\b", re.I)
+DICTAMEN = re.compile(r"\ben lo (general|particular)\b", re.I)
+
+
+def es_mocion(e: dict) -> bool:
+    texto = (e.get("motion") or {}).get("text") or ""
+    return bool(MOCION.search(texto)) and not DICTAMEN.search(texto)
 
 
 class Omitida(RuntimeError):
@@ -54,11 +67,17 @@ def emparejar(votaciones: list[dict], eventos_sil: list[dict], fuente: str) -> d
         base = {"expediente_id": sil[0]["expediente_id"], "asunto": asunto}
         vs = sorted(vs, key=lambda v: v["orden"])
         pares = len(vs) == len(sil)
+        sin = ""
+        if not pares:
+            sin_mociones = [e for e in sil if not es_mocion(e)]
+            if len(sin_mociones) < len(sil) and len(vs) == len(sin_mociones):
+                sil, pares = sin_mociones, True
+                sin = " sin contar las mociones que registra el SIL"
         for i, v in enumerate(vs):
             enlace = dict(base, criterio=f"misma fecha y el asunto del SIL contenido en el título de {fuente}")
             if pares:
                 enlace["votacion_sil"] = sil[i]["id"]
-                enlace["criterio"] += f"; votación {i + 1} de {len(vs)} del asunto en ambas fuentes"
+                enlace["criterio"] += f"; votación {i + 1} de {len(vs)} del asunto en ambas fuentes{sin}"
             enlaces[v["clave"]] = enlace
     return enlaces
 

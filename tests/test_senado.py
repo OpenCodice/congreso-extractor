@@ -61,9 +61,9 @@ def test_variantes_de_la_gaceta():
     assert idx.buscar("Avila Anaya Francisco Arturo F.")[1] == "nombre ampliado"
 
 
-def _sil(asunto, orden, fecha, denominacion):
+def _sil(asunto, orden, fecha, denominacion, texto=None):
     return {"id": f"sil-{asunto}-{orden}", "asunto": asunto, "orden": orden, "start_date": fecha,
-            "expediente_id": "sil-1", "motion": {"denominacion": denominacion}}
+            "expediente_id": "sil-1", "motion": {"denominacion": denominacion, "text": texto}}
 
 
 def test_emparejar_en_orden():
@@ -75,6 +75,24 @@ def test_emparejar_en_orden():
            _sil("9", 1, "2026-09-29", "Que reforma la Ley de Inversión Extranjera.")]
     e = cotejo.emparejar(vs, sil, "el Senado")
     assert e["5139"]["votacion_sil"] == "sil-5146374-1" and e["5140"]["votacion_sil"] == "sil-5146374-2"
+
+
+def test_emparejar_sin_las_mociones_del_sil():
+    # El SIL registra la moción suspensiva como votación nominal; el Senado no
+    # la publica. Sin ella, las dos fuentes tienen las mismas y se emparejan.
+    vs = [dict(senado.votacion(leer(f"votacion_{n}.html")), clave=n, orden=int(n)) for n in ("5140", "5139")]
+    den = ("Con proyecto de decreto por el que reforma y adiciona los artículos 82, 116 y 122 de la Constitución "
+           "Política de los Estados Unidos Mexicanos, en materia de nacionalidad única para el ejercicio de la "
+           "titularidad de los Poderes Ejecutivos Federal y Locales.")
+    sil = [_sil("5146374", 1, "2026-09-29", den, "Se rechazó admitir la moción suspensiva del grupo parlamentario de MC."),
+           _sil("5146374", 2, "2026-09-29", den, "Aprobado en lo general y en lo particular de los artículos no reservados"),
+           _sil("5146374", 3, "2026-09-29", den, "Aprobado en lo general y en lo particular con las modificaciones")]
+    e = cotejo.emparejar(vs, sil, "el Senado")
+    assert e["5139"]["votacion_sil"] == "sil-5146374-2" and e["5140"]["votacion_sil"] == "sil-5146374-3"
+    assert "sin contar las mociones" in e["5139"]["criterio"]
+    # Si aun sin mociones no coinciden, no se empareja ninguna.
+    sil.append(_sil("5146374", 4, "2026-09-29", den, "Aprobado en lo particular del artículo 82"))
+    assert all("votacion_sil" not in x for x in cotejo.emparejar(vs, sil, "el Senado").values())
 
 
 def test_sin_par_en_otra_fecha():
