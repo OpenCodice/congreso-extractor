@@ -115,33 +115,93 @@ def entidades_en(texto: str) -> list[str]:
     return sorted({c for _, _, c in finales})
 
 
-def legislaturas_aprobatorias(expediente: dict, aspectos: str | None) -> dict | None:
-    """Congresos locales que aprobaron una reforma constitucional (art. 135), según el SIL.
+_N = r"(?P<n>[a-z]+(?: y [a-z]+)?)"
+_CONGRESOS = r"(?:los|las) (?:congresos|legislaturas)"
+# Las formas en que el SIL dice cuántos congresos aprobaron y cuáles, dentro
+# de una oración (sin acentos, en minúsculas).
+_UNA_ORACION = [
+    # «Se realiza declaratoria … con el escrutinio de veintidós votos
+    # aprobatorios … remitidos por los congresos de …»
+    rf"escrutinio de {_N} votos aprobatorios .*?remitid[oa]s por {_CONGRESOS} (?P<lista>.+)",
+    # «Se comunica de la recepción de diecisiete votos aprobatorios …
+    # remitidos por los congresos de …» / «… correspondientes a los congresos de …»
+    rf"recepcion de {_N} votos aprobatorios .*?(?:remitid[oa]s por|correspondientes a) {_CONGRESOS} (?P<lista>.+)",
+    # «… recepción de veintiséis oficios de los Congresos de los estados de …,
+    # con los que remiten su voto aprobatorio …»
+    rf"recepcion de {_N} oficios de {_CONGRESOS} (?P<lista>.+?) con los que remiten su voto aprobatorio",
+    # «Se da cuenta que se recibió el voto aprobatorio de veintidós congresos …»
+    rf"voto aprobatorio de {_N} congresos (?P<lista>.+)",
+    # «Los veintisiete votos aprobatorios corresponden a los congresos de …»
+    rf"^los {_N} votos aprobatorios corresponden a {_CONGRESOS} (?P<lista>.+)",
+]
+# «La Mesa Directiva comunica la recepción de veinte oficios de diversos
+# congresos estatales con los que remiten su aprobación … Los [veinte] votos
+# aprobatorios corresponden a los congresos de …»: el número en una oración y
+# la lista en la siguiente.
+_RECEPCION = rf"recepcion de {_N} oficios de diversos congresos estatales con los que remiten su aprobacion"
+_CORRESPONDEN = rf"^(?:los (?:{_N} )?)?votos aprobatorios corresponden a {_CONGRESOS} (?P<lista>.+)"
+# Lo que sigue a la lista y puede nombrar otra cosa.
+_FIN_LISTA = re.compile(r" (?:al|a la|para la) (?:proyecto|decreto|minuta|declaratoria)\b.*$")
 
-    La declaratoria del Senado dice "escrutinio de N votos aprobatorios ...
-    remitidos por los congresos de ...". Solo se afirma la lista si el número
-    escrito coincide con las entidades nombradas.
-    """
-    declaratoria = next((a for a in expediente.get("asuntos", [])
-                         if a["tipo"] == "Declaratoria de reforma constitucional"
-                         and "congresos" in a["denominacion"].lower()), None)
-    if not declaratoria or not aspectos:
+
+def _oraciones(texto: str) -> list[str]:
+    return [clave_nombre(o) for o in re.split(r"\.\s+(?=[-–]?\s*[A-ZÁÉÍÓÚÑ])", texto)]
+
+
+def votos_aprobatorios(texto: str | None) -> tuple[int, list[str]] | None:
+    """(N, claves) de un texto del SIL que dice cuántos congresos locales
+    aprobaron y cuáles, solo si las entidades que nombra son exactamente N.
+    Un texto que no dice que los votos sean aprobatorios (las «resoluciones»
+    que se remiten) no cuenta."""
+    if not texto:
         return None
-    t = clave_nombre(aspectos)
-    m = re.search(r"escrutinio de (.+?) votos aprobatorios", t)
-    if not m or m[1] not in _NUMEROS:
-        return None
-    resto = t[m.end():]
-    corte = re.search(r"remitid[oa]s por (?:los|las) (?:congresos|legislaturas)(.+)", resto)
-    if not corte:
-        return None
-    claves = entidades_en(corte[1])
-    if len(claves) != _NUMEROS[m[1]]:
-        return None
-    return {"aprobaron": claves, "votos_aprobatorios": _NUMEROS[m[1]], "asunto": declaratoria["clave"],
-            "fecha": declaratoria["fecha"],
+    os_ = _oraciones(texto)
+    hallados = []
+    for k, o in enumerate(os_):
+        for patron in _UNA_ORACION:
+            m = re.search(patron, o)
+            if m:
+                hallados.append((m["n"], m["lista"]))
+        m = re.search(_RECEPCION, o)
+        if m and k + 1 < len(os_):
+            c = re.search(_CORRESPONDEN, os_[k + 1])
+            if c and (c["n"] is None or c["n"] == m["n"]):
+                hallados.append((m["n"], c["lista"]))
+    for n, lista in hallados:
+        if n not in _NUMEROS:
+            continue
+        claves = entidades_en(_FIN_LISTA.sub("", lista))
+        if len(claves) == _NUMEROS[n]:
+            return _NUMEROS[n], claves
+    return None
+
+
+def legislaturas_aprobatorias(declaratorias: list[tuple[dict, str | None]]) -> tuple[dict | None, str | None]:
+    """Congresos locales que aprobaron una reforma constitucional (art. 135),
+    según el SIL, de los asuntos «Declaratoria de reforma constitucional» del
+    expediente con el texto de sus aspectos relevantes.
+
+    Cada cámara da cuenta de los votos que le llegaron, a veces en días
+    distintos: se toma la lista más larga, solo si las demás están contenidas
+    en ella; si dos listas se contradicen, ninguna. Devuelve también un aviso
+    cuando ninguna cuadra o se contradicen."""
+    leidas = []
+    for asunto, texto in declaratorias:
+        r = votos_aprobatorios(texto)
+        if r:
+            leidas.append((asunto, *r))
+    if not leidas:
+        return None, "ninguna declaratoria da una lista de congresos que cuadre con su número"
+    # Con empate, la que nombra a los congresos en su denominación (la que se
+    # tomaba antes) y, si no, la primera del expediente.
+    asunto, n, claves = max(leidas, key=lambda x: (x[1], x[0].get("fecha") or "",
+                                                   "congresos" in (x[0].get("denominacion") or "").lower()))
+    if any(not set(c) <= set(claves) for _, _, c in leidas):
+        return None, "las declaratorias dan listas de congresos que se contradicen"
+    return {"aprobaron": claves, "votos_aprobatorios": n, "asunto": asunto["clave"],
+            "fecha": asunto["fecha"],
             "fuente": "aspectos relevantes de la declaratoria en el SIL",
-            "nota": "el SIL solo lista los congresos con voto aprobatorio; el resto no tiene registro"}
+            "nota": "el SIL solo lista los congresos con voto aprobatorio; el resto no tiene registro"}, None
 
 
 def _emparejar(decretos_dia: list[dict], expedientes: list[dict], nombres: dict[str, str]) -> None:
@@ -223,24 +283,27 @@ def construir(raiz: Path, repos: Path) -> dict:
             if "cpeum" not in {x["documento"] for x in d["documentos"]} or not d["expedientes"]:
                 continue
             e = next(x for x in expedientes if x["id"] == d["expedientes"][0]["id"])
-            dec = next((a for a in e["asuntos"] if a["tipo"] == "Declaratoria de reforma constitucional"
-                        and "congresos" in a["denominacion"].lower()), None)
-            if not dec:
+            decs = [a for a in e["asuntos"] if a["tipo"] == "Declaratoria de reforma constitucional"]
+            if not decs:
                 continue
+            leidas, fuentes = [], {}
             try:
-                rs = red.obtener(sil.url_seguimiento(e["seguimiento"], dec["clave"]))
-                leg = legislaturas_aprobatorias(e, sil.seguimiento(sil.decodificar(rs.contenido))["aspectos_relevantes"])
+                for dec in decs:
+                    rs = red.obtener(sil.url_seguimiento(e["seguimiento"], dec["clave"]))
+                    fuentes[dec["clave"]] = rs.procedencia()
+                    leidas.append((dec, sil.seguimiento(sil.decodificar(rs.contenido))["aspectos_relevantes"]))
             except red.Pendiente:
                 pendientes += 1
                 continue
             except (RuntimeError, ValueError, KeyError) as ex:
                 errores.append(f"{d['id']}: {ex}")
                 continue
+            leg, aviso = legislaturas_aprobatorias(leidas)
             if leg:
-                leg["sources"] = [rs.procedencia()]
+                leg["sources"] = [fuentes[leg["asunto"]]]
                 d["legislaturas_estatales"] = leg
             else:
-                errores.append(f"{d['id']}: la declaratoria {dec['clave']} no da una lista de congresos que cuadre")
+                errores.append(f"{d['id']}: {aviso}")
 
     # Con una página sin bajar, un decreto quedaría sin él o sin sus congresos:
     # no se escribe nada hasta que el archivo las tenga todas.

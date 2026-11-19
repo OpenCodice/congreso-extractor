@@ -84,19 +84,54 @@ def test_resultados_votacion():
     assert piloto["seguimiento"] == "5128211" and piloto["publicado_dof"] == "2026-10-07"
 
 
+def _aspectos(clave, piloto=False):
+    nombre = f"piloto_seguimiento_declaratoria_{clave}.html" if piloto else f"seguimiento_declaratoria_{clave}.html"
+    return sil.seguimiento(html(nombre))["aspectos_relevantes"]
+
+
+def _dec(clave, fecha="2026-01-01"):
+    return {"clave": clave, "fecha": fecha}
+
+
 def test_legislaturas_de_la_declaratoria():
-    exp = {"asuntos": sil.historial(html("piloto_historial_5135887.html"))}
-    aspectos = sil.seguimiento(html("piloto_seguimiento_declaratoria_5151086.html"))["aspectos_relevantes"]
-    leg = decretos.legislaturas_aprobatorias(exp, aspectos)
+    leg, aviso = decretos.legislaturas_aprobatorias([(_dec("5151086"), _aspectos("5151086", piloto=True))])
+    assert aviso is None
     assert leg["votos_aprobatorios"] == 22 and len(leg["aprobaron"]) == 22
     assert {"edomex", "cdmx", "michoacan", "veracruz", "baja-california"} <= set(leg["aprobaron"])
     assert "baja-california-sur" not in leg["aprobaron"]
 
 
+def test_legislaturas_en_cada_forma_del_sil():
+    # Número en una oración y lista en la siguiente; Jalisco votó en contra y no se cuenta.
+    n, claves = decretos.votos_aprobatorios(_aspectos("4773522"))
+    assert n == 23 and "jalisco" not in claves and "chiapas" not in claves
+    # «oficios de los Congresos de los estados de …, con los que remiten su voto aprobatorio»
+    assert decretos.votos_aprobatorios(_aspectos("4777744"))[0] == 26
+    # «el voto aprobatorio de veintidós congresos …»
+    assert decretos.votos_aprobatorios(_aspectos("4799626"))[0] == 22
+    # «Los veintisiete votos aprobatorios corresponden…», con otra oración en medio.
+    assert decretos.votos_aprobatorios(_aspectos("5080773"))[0] == 27
+    # «resoluciones» que no dicen ser aprobatorias: no se cuentan.
+    assert decretos.votos_aprobatorios(_aspectos("4790422")) is None
+
+
+def test_legislaturas_de_dos_camaras_la_lista_mas_larga():
+    # El Senado dio cuenta de 17 votos; Diputados, al día siguiente, de 19 (los mismos y dos más).
+    leg, aviso = decretos.legislaturas_aprobatorias([(_dec("4852781", "2025-03-11"), _aspectos("4852781")),
+                                                     (_dec("4853905", "2025-03-12"), _aspectos("4853905"))])
+    assert aviso is None and leg["votos_aprobatorios"] == 19 and leg["asunto"] == "4853905"
+    assert {"durango", "puebla"} <= set(leg["aprobaron"])
+
+
 def test_legislaturas_no_cuadran_no_se_afirman():
-    exp = {"asuntos": sil.historial(html("piloto_historial_5135887.html"))}
     texto = "Se realiza declaratoria con el escrutinio de veintitres votos aprobatorios remitidos por los congresos de Jalisco y Sonora."
-    assert decretos.legislaturas_aprobatorias(exp, texto) is None
+    assert decretos.votos_aprobatorios(texto) is None
+    leg, aviso = decretos.legislaturas_aprobatorias([(_dec("1"), texto)])
+    assert leg is None and "cuadre" in aviso
+    otra = "Se realiza declaratoria con el escrutinio de dos votos aprobatorios remitidos por los congresos de Jalisco y Puebla."
+    una = "Se realiza declaratoria con el escrutinio de dos votos aprobatorios remitidos por los congresos de Jalisco y Sonora."
+    leg, aviso = decretos.legislaturas_aprobatorias([(_dec("1"), una), (_dec("2"), otra)])
+    assert leg is None and "contradicen" in aviso
 
 
 def test_entidades_variantes():
