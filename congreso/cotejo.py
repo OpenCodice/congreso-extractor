@@ -10,6 +10,20 @@ a la votación del SIL cuando el par es inequívoco:
    (suspensivas, de discusión) que el SIL registra como nominales y las otras
    fuentes no publican; si así coinciden, se emparejan en orden sin ellas.
 
+Lo que así queda sin par se liga después por sus cuentas (`completar`): la
+misma fecha y los mismos votos a favor, en contra y abstenciones, cuando es la
+única votación sin par de cada fuente con esa fecha y esas cuentas, y además:
+
+3. el título ya la había asignado a ese asunto del SIL; o
+4. las dos fuentes publican los votos nominales y coinciden persona por
+   persona (a lo más `TOLERANCIA` legisladores en otro sentido); o
+5. la fuente le da la misma fecha y el mismo asunto, letra por letra, que a
+   una votación ligada por el criterio 4 a ese asunto del SIL.
+
+Las cuentas solas no bastan: el mismo día hay votaciones distintas con cuentas
+idénticas (unánimes en serie, lo general y lo particular de un dictamen). Si
+hay más de una candidata en cualquiera de las dos fuentes, no se liga.
+
 Si las dos fuentes difieren (conteos o votos individuales), ambas se
 conservan y la diferencia queda en `discrepancias`.
 """
@@ -23,6 +37,10 @@ from .decretos import _palabras
 
 UMBRAL = 0.7
 MARGEN = 0.15
+# Legisladores que pueden aparecer en otro sentido entre dos fuentes de la
+# misma votación (el SIL suma votos emitidos fuera del tablero).
+TOLERANCIA = 2
+EFECTIVOS = ("yes", "no", "abstain")
 
 # «Se rechazó admitir la moción suspensiva…», «Se rechazó ponerse a discusión
 # la propuesta de moción…»: votaciones de trámite, no del dictamen.
@@ -80,6 +98,88 @@ def emparejar(votaciones: list[dict], eventos_sil: list[dict], fuente: str) -> d
                 enlace["criterio"] += f"; votación {i + 1} de {len(vs)} del asunto en ambas fuentes{sin}"
             enlaces[v["clave"]] = enlace
     return enlaces
+
+
+def _cuentas(e: dict) -> tuple:
+    c = {x["option"]: x["value"] for x in e["counts"]}
+    return tuple(c.get(o) for o in EFECTIVOS)
+
+
+def desacuerdos(e: dict, par: dict) -> int | None:
+    """Legisladores que una fuente da en un sentido y la otra en otro o no
+    lista; None si alguna no publica los votos nominales."""
+    if not e["votes"] or not par["votes"]:
+        return None
+    a = {x["voter_id"]: x["option"] for x in e["votes"]}
+    b = {x["voter_id"]: x["option"] for x in par["votes"]}
+    distintos = sum(1 for p in a.keys() & b.keys() if a[p] != b[p])
+
+    def solo(x, y):
+        return sum(1 for p, o in x.items() if p not in y and o in EFECTIVOS)
+    return distintos + max(solo(a, b), solo(b, a))
+
+
+def inciertas(sin_leer: list[int], conocidas: list[tuple[int, str]]):
+    """Fechas en las que la fuente puede tener una votación que no se conoce:
+    las que van de la votación conocida anterior a la siguiente (por su orden
+    en la fuente) de cada una que no se pudo leer. En esas fechas no se puede
+    afirmar que una candidata sea la única."""
+    tramos = []
+    for k in sin_leer:
+        antes = max(((o, f) for o, f in conocidas if o < k), default=(k, "0000-00-00"))[1]
+        despues = min(((o, f) for o, f in conocidas if o > k), default=(k, "9999-99-99"))[1]
+        tramos.append((min(antes, despues), max(antes, despues)))
+    return lambda fecha: any(a <= fecha <= b for a, b in tramos)
+
+
+def completar(enlaces: dict[str, dict], eventos: dict[str, tuple[dict, dict]], publicadas: list[dict],
+              eventos_sil: list[dict], fuente: str, incierta=lambda fecha: False) -> None:
+    """Liga por cuentas lo que `emparejar` dejó sin par; anota en `enlaces`.
+
+    `eventos`: clave → (votación leída, su VoteEvent) de esta corrida;
+    `publicadas`: los VoteEvents de la fuente ya publicados que esta corrida no
+    volvió a leer (cuentan para saber si una candidata es única)."""
+    tomadas = ({x["votacion_sil"] for x in enlaces.values() if "votacion_sil" in x}
+               | {p["votacion_sil"] for p in publicadas if p.get("votacion_sil")})
+    del_sil: dict[tuple, list[dict]] = {}
+    for s in eventos_sil:
+        if s["id"] not in tomadas:
+            del_sil.setdefault((s["start_date"], _cuentas(s)), []).append(s)
+    propias: dict[tuple, list[str | None]] = {}
+    for clave, (_, e) in eventos.items():
+        if "votacion_sil" not in enlaces.get(clave, {}):
+            propias.setdefault((e["start_date"], _cuentas(e)), []).append(clave)
+    for p in publicadas:
+        if not p.get("votacion_sil"):
+            propias.setdefault((p["start_date"], _cuentas(p)), []).append(None)
+    candidatas = {claves[0]: del_sil[k][0] for k, claves in propias.items()
+                  if len(claves) == 1 and claves[0] is not None and len(del_sil.get(k, [])) == 1
+                  and not incierta(k[0])}
+
+    unicas = f"únicas votaciones sin par con la misma fecha y las mismas cuentas en {fuente} y en el SIL"
+    por_asunto: dict[tuple[str, str], set[tuple[str, str]]] = {}
+    for clave, s in candidatas.items():
+        v, e = eventos[clave]
+        previo = enlaces.get(clave)
+        if previo:
+            if previo["asunto"] == s["asunto"]:
+                previo["votacion_sil"] = s["id"]
+                previo["criterio"] += f"; {unicas}"
+            continue
+        d = desacuerdos(e, s)
+        if d is not None and d <= TOLERANCIA:
+            enlaces[clave] = {"expediente_id": s["expediente_id"], "asunto": s["asunto"], "votacion_sil": s["id"],
+                              "criterio": f"{unicas}, y los votos nominales coinciden"
+                                          + (f" salvo en {d}" if d else "")}
+            por_asunto.setdefault((v["fecha"], " ".join(v["asunto"].split())), set()).add((s["asunto"], e["id"]))
+    for clave, s in candidatas.items():
+        v, _ = eventos[clave]
+        hermanas = por_asunto.get((v["fecha"], " ".join(v["asunto"].split())), set())
+        if clave in enlaces or {a for a, _ in hermanas} != {s["asunto"]}:
+            continue
+        enlaces[clave] = {"expediente_id": s["expediente_id"], "asunto": s["asunto"], "votacion_sil": s["id"],
+                          "criterio": f"{unicas}, y el mismo asunto en {fuente} que {sorted(i for _, i in hermanas)[0]}, "
+                                      f"ligada a ese asunto del SIL por sus votos nominales"}
 
 
 def faltantes(sin_mandato: list[dict]) -> list[dict]:

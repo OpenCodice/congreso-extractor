@@ -25,6 +25,7 @@ ESPERAS = (120, 600)
 # que una corrida; lo que falte sigue en la siguiente, desde el caché, y así no
 # se quedan sin correr los pasos de después.
 PRESUPUESTO = float(os.environ.get("CONGRESO_PRESUPUESTO_SENADO", "120"))
+FUENTE = "la votación del Senado"
 
 
 def indice(raiz: Path, leg: str, camara: str) -> nombres.Indice:
@@ -91,6 +92,7 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
     if not listado:
         raise RuntimeError("el listado de votaciones del Senado está vacío")
     vigentes = None if solo else {f"senado-{x['clave']}" for x in listado}
+    listadas = [(x["clave"], int(x["clave"])) for x in listado]
     if solo:
         listado = [x for x in listado if x["clave"] in solo]
     eventos_sil = [e for e in datos.todos(raiz, f"votaciones/{leg}/senado") if e["id"].startswith("sil-")]
@@ -121,17 +123,20 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
 
     errores += lecturas.AVISOS
     lecturas.AVISOS.clear()
-    enlaces = cotejo.emparejar([v for v, _, _ in leidas], eventos_sil, "la votación del Senado")
+    enlaces = cotejo.emparejar([v for v, _, _ in leidas], eventos_sil, FUENTE)
     return dict(escribir(raiz, leg, "senado", leidas, enlaces, eventos_sil, evento, errores,
-                         {"listado": rl.procedencia()}, "senado-", vigentes), pendientes_de_descarga=pendientes)
+                         {"listado": rl.procedencia()}, "senado-", vigentes, FUENTE, listadas),
+                pendientes_de_descarga=pendientes)
 
 
 def escribir(raiz: Path, leg: str, camara: str, leidas, enlaces, eventos_sil, hacer_evento, errores,
-             extra: dict, prefijo: str, vigentes: set[str] | None) -> dict:
+             extra: dict, prefijo: str, vigentes: set[str] | None, fuente: str = "la fuente",
+             listadas: list[tuple[str, int]] | tuple = ()) -> dict:
     """Escribe los eventos leídos; con `vigentes` (todo lo que la fuente lista
-    hoy), marca como retirado lo publicado antes que ya no aparece."""
+    hoy), marca como retirado lo publicado antes que ya no aparece. `listadas`:
+    clave y orden de cada votación que la fuente lista, leída o no."""
     sil_por_id = {e["id"]: e for e in eventos_sil}
-    escritas = ligadas = 0
+    hechos = []
     for v, filas, respuestas in leidas:
         fuentes, copias = cotejo.procedencias(respuestas)
         try:
@@ -139,6 +144,13 @@ def escribir(raiz: Path, leg: str, camara: str, leidas, enlaces, eventos_sil, ha
         except (Omitida, KeyError) as err:
             errores.append(str(err))
             continue
+        hechos.append((v, e, copias))
+
+    if hechos:
+        completar(raiz, leg, camara, prefijo, hechos, enlaces, eventos_sil, fuente, listadas)
+
+    escritas = ligadas = 0
+    for v, e, copias in hechos:
         enlace = enlaces.get(v["clave"])
         if enlace:
             e.update(enlace)
@@ -163,6 +175,23 @@ def escribir(raiz: Path, leg: str, camara: str, leidas, enlaces, eventos_sil, ha
     return {"votaciones": escritas, "ligadas": ligadas, "retiradas_de_la_fuente": retiradas,
             "con_par_sil": sum(1 for x in enlaces.values() if "votacion_sil" in x),
             "omitidas": len(errores), "errores": errores, **extra}
+
+
+def completar(raiz: Path, leg: str, camara: str, prefijo: str, hechos, enlaces, eventos_sil, fuente: str,
+              listadas) -> None:
+    """Liga por cuentas lo que quedó sin par (`cotejo.completar`). Para saber
+    si una candidata es la única hace falta todo lo que publica la fuente: lo
+    que esta corrida no volvió a leer se toma de lo ya publicado, y en las
+    fechas donde puede haber una votación que no se conoce, no se liga."""
+    propios = {e["id"] for _, e, _ in hechos}
+    publicadas = [r for r in datos.todos(raiz, f"votaciones/{leg}/{camara}")
+                  if r["id"].startswith(prefijo) and r["id"] not in propios]
+    orden = {prefijo + clave: o for clave, o in listadas}
+    conocidas = ([(v["orden"], e["start_date"]) for v, e, _ in hechos]
+                 + [(orden[r["id"]], r["start_date"]) for r in publicadas if r["id"] in orden])
+    vistas = propios | {r["id"] for r in publicadas}
+    cotejo.completar(enlaces, {v["clave"]: (v, e) for v, e, _ in hechos}, publicadas, eventos_sil, fuente,
+                     cotejo.inciertas([o for i, o in orden.items() if i not in vistas], conocidas))
 
 
 _INDICES: dict[tuple[Path, str, str], nombres.Indice] = {}

@@ -13,6 +13,8 @@ from . import cotejo, datos, gaceta, lecturas, red, validar
 from .texto import romano
 from .votaciones_senado import VIGENCIA, escribir
 
+FUENTE = "la votación de la Gaceta"
+
 
 def evento(leg: str, v: dict, filas: list[dict], idx, fuentes: list[dict]) -> dict:
     lista = Counter((f["grupo"], f["opcion"]) for f in filas)
@@ -77,12 +79,13 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
         votaciones += del_periodo
     # Con el índice y todos los periodos leídos, es todo lo que la Gaceta publica hoy.
     vigentes = None if solo or not completo else {f"gaceta-{x['tabla'].removeprefix('tabla')}" for x in votaciones}
-    if solo:
-        votaciones = [x for x in votaciones if x["tabla"] in solo]
+    listadas = [(x["tabla"].removeprefix("tabla"), orden) for orden, x in enumerate(votaciones)]
     eventos_sil = [e for e in datos.todos(raiz, f"votaciones/{leg}/diputados") if e["id"].startswith("sil-")]
 
     leidas = []
     for orden, x in enumerate(votaciones):
+        if solo and x["tabla"] not in solo:
+            continue
         clave = x["tabla"].removeprefix("tabla")
         try:
             rt = red.obtener(x["url"], vigencia_horas=VIGENCIA)
@@ -105,6 +108,7 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
 
     errores += lecturas.AVISOS
     lecturas.AVISOS.clear()
-    enlaces = cotejo.emparejar([v for v, _, _ in leidas], eventos_sil, "la votación de la Gaceta")
+    enlaces = cotejo.emparejar([v for v, _, _ in leidas], eventos_sil, FUENTE)
     return dict(escribir(raiz, leg, "diputados", leidas, enlaces, eventos_sil, evento, errores,
-                         {"indice": ri.procedencia()}, "gaceta-", vigentes), pendientes_de_descarga=pendientes)
+                         {"indice": ri.procedencia()}, "gaceta-", vigentes, FUENTE, listadas),
+                pendientes_de_descarga=pendientes)

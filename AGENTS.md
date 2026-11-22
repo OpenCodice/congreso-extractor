@@ -18,7 +18,16 @@ fuera de la biblioteca estándar de Python 3.12.
 - `votaciones_senado.py`, `votaciones_gaceta.py` — sus VoteEvents
   (`senado-…`, `gaceta-…`); `cotejo.py`, cómo se ligan a la votación del SIL
   y qué se anota cuando difieren; `nombres.py`, cómo se liga el nombre de
-  cada fuente a un mandato.
+  cada fuente a un mandato. El par con el SIL sale de la fecha y el título
+  (la denominación del SIL contenida en él, y las votaciones del asunto en
+  orden) o, para lo que así queda sin par, de la fecha y las cuentas: la
+  única votación sin par de cada fuente con esa fecha y esos votos a favor,
+  en contra y abstenciones, y además el mismo asunto por título, los votos
+  nominales iguales persona por persona, o el mismo asunto en la fuente que
+  una ligada por sus votos. Las cuentas solas nunca ligan (el mismo día hay
+  votaciones distintas con cuentas idénticas), y tampoco se liga en fechas
+  donde la fuente lista una votación que aún no se pudo leer. Cada corrida
+  vuelve a cotejar todas las votaciones, no solo las nuevas.
 - `asuntos.py` — iniciativas, proposiciones con punto de acuerdo y dictámenes
   en sentido negativo de la legislatura, desde el buscador avanzado del SIL
   (por meses; un mes que pasa de 999 filas se parte). El autor se liga por
