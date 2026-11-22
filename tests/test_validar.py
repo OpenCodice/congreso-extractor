@@ -1,3 +1,5 @@
+import hashlib
+
 from congreso import datos, validar
 
 
@@ -48,3 +50,24 @@ def test_diferencia_sin_explicar(tmp_path):
 def test_cuadra_sin_declarar_nada(tmp_path):
     _repo(tmp_path, counts=[{"option": "yes", "value": 2}], group_results=[{"grupo": "PAN", "yes": 2}])
     assert validar.validar(tmp_path) == []
+
+
+def _con_foto(tmp_path, image):
+    _repo(tmp_path, counts=[{"option": "yes", "value": 2}], group_results=[{"grupo": "PAN", "yes": 2}])
+    jpg = b"\xff\xd8foto"
+    sha = hashlib.sha256(jpg).hexdigest()
+    archivo = datos.guardar_fuente(tmp_path, sha, jpg, "jpg")
+    m = datos.leer(tmp_path, "mandatos/lxvi/senado/ana.json")
+    m["sources"].append({"url": "http://sil/Archivos/Fotos/1.jpg", "sha256": sha, "archivo": archivo})
+    datos.escribir(tmp_path, "mandatos/lxvi/senado/ana.json", m)
+    datos.escribir(tmp_path, "personas/ana.json", {"id": "ana", "image": image})
+
+
+def test_image_es_la_foto_copiada_de_un_mandato(tmp_path):
+    _con_foto(tmp_path, "http://sil/Archivos/Fotos/1.jpg")
+    assert validar.validar(tmp_path) == []
+
+
+def test_image_sin_copia_no_pasa(tmp_path):
+    _con_foto(tmp_path, "http://sil/Archivos/Fotos/2.jpg")
+    assert any("persona ana: image" in e for e in validar.validar(tmp_path))

@@ -18,6 +18,8 @@ CAMARAS = {"diputados": 1, "senado": 2}
 _REFERENCIA = re.compile(r"Referencia=(\d+)")
 _ASUNTO = re.compile(r"AbrirAsunto\(\"(\d+)\"\)")
 _TRAMITE = re.compile(r"ClaveTramite=(\d+)")
+# La foto oficial del perfil; sin foto, el SIL pone `fotoNoDisponible.jpg`.
+_FOTO = re.compile(r'<img[^>]*src="(/Archivos/Fotos/\d+\.jpg)"[^>]*alt="Foto del Legislador"', re.I)
 _CONTEOS = re.compile(r"A Favor:\s*(\d+)\s*En contra:\s*(\d+)\s*Abstenci(?:ón|ones|on):?\s*(\d+)", re.I)
 
 
@@ -144,7 +146,9 @@ def perfil(documento: str) -> dict:
 
     if not valor("Partido") and not valor("Principio de elección"):
         raise ValueError("perfil sin datos: la página no es un perfil de legislador")
+    foto = _FOTO.search(documento)
     return {
+        "foto": BASE + foto[1] if foto else None,
         "estatus": valor("Estatus"),
         "partido": valor("Partido"),
         "entidad": valor("Entidad"),

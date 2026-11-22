@@ -24,7 +24,12 @@ fuera de la biblioteca estándar de Python 3.12.
   (por meses; un mes que pasa de 999 filas se parte). El autor se liga por
   `Referencia`; un registro solo se reescribe si cambió lo que dice la fuente.
 - `padron.py`, `votaciones.py`, `decretos.py` — arman los registros Popolo y
-  sus extensiones; `validar.py`, los invariantes del repo de datos.
+  sus extensiones; `validar.py`, los invariantes del repo de datos. La foto
+  oficial de cada mandato (la del perfil del SIL, `/Archivos/Fotos/{Referencia}.jpg`;
+  sin foto, el SIL pone una genérica que no se toma) es una fuente más del
+  mandato, copiada en `fuentes/` como `.jpg` (o `.png`, si eso es lo que sirve el SIL); la `image` de la persona es la
+  de su mandato más reciente con foto. Mientras una foto no se descarga, sigue
+  la copia anterior.
 - `lecturas.py` — páginas que el parser no leyó: el fallo, la lectura del
   agente y su verificación determinista; `scripts/regresion.py` compara dos
   versiones de los parsers sobre las páginas en caché.

@@ -44,6 +44,14 @@ def test_perfil_con_baja_y_distrito():
     assert len(p["comisiones"]) == 3
 
 
+def test_perfil_con_foto_oficial():
+    assert sil.perfil(html("perfil_9228248.html"))["foto"] == "http://sil.gobernacion.gob.mx/Archivos/Fotos/9228248.jpg"
+
+
+def test_perfil_sin_foto_no_toma_la_generica():
+    assert sil.perfil(html("perfil_9229127.html"))["foto"] is None
+
+
 def test_perfil_estatus_comentado():
     # El SIL comenta el estatus de los activos; sigue siendo el dato oficial.
     assert sil.perfil(html("perfil_9228260.html"))["estatus"] == "Activo(a)"

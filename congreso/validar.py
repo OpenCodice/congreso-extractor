@@ -6,7 +6,7 @@
   exacta está declarada (`diferencia_conteos`, `diferencia_grupos`) y explicada
   en `inconsistencias`.
 - Cada dato cita al menos una fuente, y las copias guardadas coinciden con su
-  huella.
+  huella. La foto de una persona (`image`) es una de esas copias.
 """
 from __future__ import annotations
 
@@ -59,7 +59,8 @@ def declarar_diferencias(v: dict) -> None:
 def validar(raiz: Path) -> list[str]:
     errores: list[str] = []
     orgs = {o["id"] for o in datos.todos(raiz, "organizaciones")}
-    personas = {p["id"] for p in datos.todos(raiz, "personas")}
+    registros_personas = datos.todos(raiz, "personas")
+    personas = {p["id"] for p in registros_personas}
     mandatos = {m["id"]: m for m in datos.todos(raiz, "mandatos")}
     expedientes = {e["id"]: e for e in datos.todos(raiz, "expedientes")}
     votaciones = {v["id"]: v for v in datos.todos(raiz, "votaciones")}
@@ -85,6 +86,13 @@ def validar(raiz: Path) -> list[str]:
         if m.get("formula_id") and m["formula_id"] not in mandatos:
             errores.append(f"{d}: fórmula {m['formula_id']} no existe")
         fuentes(m, d)
+
+    # La foto de una persona es la de uno de sus mandatos, que la cita con su copia.
+    fotos = {(m["person_id"], f["url"]) for m in mandatos.values() for f in m["sources"] if "archivo" in f
+             and f["archivo"].endswith((".jpg", ".png"))}
+    for p in registros_personas:
+        if "image" in p and (p["id"], p["image"]) not in fotos:
+            errores.append(f"persona {p['id']}: image {p['image']} no es la foto copiada de ninguno de sus mandatos")
 
     for v in votaciones.values():
         d = f"votación {v['id']}"

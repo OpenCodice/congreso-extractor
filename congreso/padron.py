@@ -26,6 +26,46 @@ def _principio(texto: str) -> str:
     return slug(texto)  # mayoria-relativa, representacion-proporcional, primera-minoria
 
 
+def es_foto(fuente: dict) -> bool:
+    return "/Archivos/Fotos/" in fuente["url"]
+
+
+# El SIL sirve algunas fotos en PNG aunque la URL diga `.jpg`: la copia lleva
+# la extensión de su formato real.
+FORMATOS_FOTO = {b"\xff\xd8": "jpg", b"\x89PNG": "png"}
+
+
+def _foto(raiz: Path, url: str) -> dict | None:
+    """La foto oficial como una fuente más del mandato: copia en `fuentes/`
+    con su huella. None si lo que llegó no es una imagen."""
+    r = red.obtener(url, vigencia_horas=24 * 30, bloqueos=(90,))
+    ext = next((e for magia, e in FORMATOS_FOTO.items() if r.contenido.startswith(magia)), None)
+    if ext is None:
+        return None
+    return dict(r.procedencia(), archivo=datos.guardar_fuente(raiz, r.sha256, r.contenido, ext))
+
+
+def imagenes(raiz: Path, personas: set[str]) -> int:
+    """`image` (Popolo) de cada persona: la foto de su mandato más reciente que
+    tenga una. Se elige sobre todos sus mandatos, de cualquier cámara, para que
+    el padrón de una cámara no cambie la que puso el de la otra."""
+    por_persona: dict[str, list[dict]] = {}
+    for m in datos.todos(raiz, "mandatos"):
+        if m["person_id"] in personas:
+            por_persona.setdefault(m["person_id"], []).append(m)
+    escritos = 0
+    for pid in sorted(personas):
+        con_foto = [(m.get("start_date") or "", int(m["identifiers"][0]["identifier"]), f["url"])
+                    for m in por_persona.get(pid, []) for f in m["sources"] if es_foto(f)]
+        persona = datos.leer(raiz, f"personas/{pid}.json")
+        if con_foto:
+            persona["image"] = max(con_foto)[2]
+        else:
+            persona.pop("image", None)
+        escritos += datos.escribir(raiz, f"personas/{pid}.json", persona)
+    return escritos
+
+
 def organizaciones_base(raiz: Path) -> None:
     for camara, (oid, nombre, _) in catalogos.CAMARAS.items():
         datos.escribir(raiz, f"organizaciones/{oid}.json", {
@@ -64,8 +104,10 @@ def construir(raiz: Path, legislatura: int, camara: str, perfiles: bool = True) 
     referencias = {f["referencia"] for f in filas}
     bloqueado, pendientes = False, 0
     escritos = 0
+    personas: set[str] = set()
     for f in filas:
         pid = id_persona(f["nombre"])
+        personas.add(pid)
         persona = datos.leer(raiz, f"personas/{pid}.json") or {
             "id": pid, "name": f["nombre"], "identifiers": []}
         if len(f["nombre_partes"]) >= 2:
@@ -102,6 +144,8 @@ def construir(raiz: Path, legislatura: int, camara: str, perfiles: bool = True) 
         if f["entidad"] and mandato["area"]["entidad"] is None:
             raise KeyError(f"entidad desconocida: {f['entidad']!r}")
         ruta = f"mandatos/{leg}/{camara}/{f['referencia']}.json"
+        previo = datos.leer(raiz, ruta) or {}
+        foto_previa = next((x for x in previo.get("sources", []) if es_foto(x)), None)
         p, rp = None, None
         if perfiles and not bloqueado:
             try:
@@ -130,8 +174,20 @@ def construir(raiz: Path, legislatura: int, camara: str, perfiles: bool = True) 
             mandato["licencias"] = p["licencias"]
             mandato["comisiones"] = p["comisiones"]
             mandato["sources"].append(rp.procedencia())
+            foto = None
+            if p["foto"] and not bloqueado:
+                try:
+                    foto = _foto(raiz, p["foto"])
+                except red.Pendiente:
+                    pass
+                except red.Bloqueado:
+                    bloqueado = True
+            # Mientras no se descarga, sigue la copia anterior de la misma foto.
+            if foto is None and p["foto"] and foto_previa and foto_previa["url"] == p["foto"]:
+                foto = foto_previa
+            if foto:
+                mandato["sources"].append(foto)
         else:
-            previo = datos.leer(raiz, ruta) or {}
             perfil_previo = next((x for x in previo.get("sources", []) if "PerfilLegislador" in x["url"]), None)
             if perfil_previo:
                 for k in ("estatus", "formula_id", "formula_referencia", "licencias", "comisiones"):
@@ -141,8 +197,11 @@ def construir(raiz: Path, legislatura: int, camara: str, perfiles: bool = True) 
                     if k in previo.get("area", {}):
                         mandato["area"][k] = previo["area"][k]
                 mandato["sources"].append(perfil_previo)
+                if foto_previa:
+                    mandato["sources"].append(foto_previa)
             elif perfiles:
                 pendientes += 1
         escritos += datos.escribir(raiz, ruta, mandato)
+    escritos += imagenes(raiz, personas)
     return {"mandatos": len(filas), "archivos_cambiados": escritos, "perfiles_pendientes": pendientes,
             "errores": [f"{pendientes} perfiles sin descargar (firewall del SIL)"] if pendientes else []}
