@@ -33,6 +33,6 @@ texto="$(sed -e "s#__PENDIENTES__#$TRABAJO/pendientes.json#g" -e "s#__PROPUESTAS
   --max-turns "${AGENTE_MAX_TURNOS:-80}" \
   --permission-mode acceptEdits \
   --allowedTools Bash Read Write Glob Grep \
-  ${AGENTE_MODELO:+--model "$AGENTE_MODELO"} \
+  --model "${AGENTE_MODELO:-claude-sonnet-5-5}" \
   > "$TRABAJO/agente-$etapa.log" 2>&1) || echo "::warning::El agente ($etapa) terminó con error (ver $TRABAJO/agente-$etapa.log)."
 tail -n 5 "$TRABAJO/agente-$etapa.log" || true

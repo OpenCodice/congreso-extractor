@@ -50,7 +50,7 @@ claude -p "$(cat "$TRABAJO/brief.md")" \
   --max-turns "${AGENTE_MAX_TURNOS:-150}" \
   --permission-mode acceptEdits \
   --allowedTools Bash Read Write Edit Glob Grep \
-  ${AGENTE_MODELO:+--model "$AGENTE_MODELO"} \
+  --model "${AGENTE_MODELO:-claude-opus-5-5}" \
   > "$TRABAJO/agente.log" 2>&1 || echo "::warning::El agente terminó con error (ver agente.log)."
 tail -n 20 "$TRABAJO/agente.log" || true
 

@@ -23,6 +23,6 @@ log="$CONGRESO_FALLOS/agente-leer-$(date -u +%H%M%S).log"
   --max-turns "${AGENTE_MAX_TURNOS:-150}" \
   --permission-mode acceptEdits \
   --allowedTools Bash Read Write Glob Grep \
-  ${AGENTE_MODELO:+--model "$AGENTE_MODELO"} \
+  --model "${AGENTE_MODELO:-claude-sonnet-5-5}" \
   > "$log" 2>&1) || echo "::warning::El agente lector terminó con error (ver $log)."
 tail -n 5 "$log" || true
