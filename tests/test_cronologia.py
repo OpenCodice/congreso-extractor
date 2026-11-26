@@ -130,3 +130,12 @@ def test_validar_rechaza_una_numeracion_con_huecos(tmp_path):
         "decretos": [{"numero": 2, "titulo": "t", "fecha": "2020-01-01",
                       "publicaciones": [{"fecha": "2020-01-01", "archivos": []}]}]})
     assert any("numeración" in e for e in validar.validar(tmp_path))
+
+
+def test_fecha_mal_tecleada_se_completa_con_el_nombre_del_archivo():
+    # «| DOF 04-06-214 |» enlaza `LCPAF_ref07_04jun14.pdf`.
+    d = _leer("lcpaf.htm")["decretos"][6]
+    assert d["numero"] == 7 and d["fecha"] == "2014-06-04"
+    assert d["publicaciones"][0]["fecha_segun"] == "nombre del archivo"
+    assert cronologia._fecha_con_errata("DOF 04-06-214", ["x/LCPAF_ref07_05jun14.pdf"]) is None
+    assert cronologia._fecha_con_errata("DOF 04-06-314", ["x/LCPAF_ref07_04jun14.pdf"]) is None

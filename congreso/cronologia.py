@@ -36,7 +36,12 @@ _TRAMO = re.compile(rf"\b(\d{{1,2}})(?:[-/](\d{{1,2}}))?(?:[-/](\d{{4}}))?\s+al\
 _SOLO_FECHA = re.compile(rf"^{_DIA}$")
 _NUMERO = re.compile(r"^\d{1,3}$")
 _AVISOS = {"nuevo", "nueva"}
-_REFORMAS = re.compile(r"^decretos? de reforma", re.I)
+_REFORMAS = re.compile(r"^decretos?\s+(de\s+)?reforma", re.I)
+# «DOF 04-06-214»: una fecha mal tecleada; la del nombre del archivo
+# (`LFPC_ref26_04jun14.pdf`) la completa si coincide con lo que sí se lee.
+_ERRATA = re.compile(r"\b(\d{1,2})[-/](\d{1,2})[-/](\d{1,5})\b")
+_EN_NOMBRE = re.compile(r"_(\d{2})([a-z]{3})(\d{2})(?:_|\.)")
+_MESES = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 _ARCHIVOS = ("pdf", "doc", "docx", "zip")
 
 
@@ -143,6 +148,27 @@ def _fechas(texto: str) -> tuple[re.Match, str | None, str | None] | None:
     return (m, _iso(*m.groups()), None) if m else None
 
 
+def _contenida(corta: str, larga: str) -> bool:
+    resto = iter(larga)
+    return all(c in resto for c in corta)
+
+
+def _fecha_con_errata(texto: str, enlaces: list[str]) -> tuple[re.Match, str] | None:
+    """La fecha de un renglón cuyo año está mal tecleado, si el nombre de su
+    archivo da el mismo día y mes y un solo año compatible con lo escrito."""
+    m = _ERRATA.search(texto)
+    if not m:
+        return None
+    for destino in enlaces:
+        n = _EN_NOMBRE.search(destino.rsplit("/", 1)[-1].lower())
+        if not n or n[2] not in _MESES or (int(n[1]), _MESES.index(n[2]) + 1) != (int(m[1]), int(m[2])):
+            continue
+        posibles = [siglo + n[3] for siglo in ("19", "20") if _contenida(m[3], siglo + n[3])]
+        if len(posibles) == 1:
+            return m, _iso(m[1], m[2], posibles[0])
+    return None
+
+
 def _archivo(destino: str, texto: str, base: str) -> dict | None:
     """El archivo de una publicación. La imagen escaneada del Diario se
     reconoce por su nombre (`_ima`) o por el texto de su enlace."""
@@ -178,7 +204,7 @@ def _segmentos(p: _Parrafo) -> list[tuple[str, list[str]]]:
 
 def _es_renglon(p: _Parrafo) -> bool:
     """Un renglón de publicaciones, no un título: lleva barras o «DOF» y fecha."""
-    return bool(_fechas(p.texto)) and ("|" in p.texto or re.search(r"\bDOF\b", p.texto) is not None)
+    return bool(_fechas(p.texto) or _ERRATA.search(p.texto)) and ("|" in p.texto or re.search(r"\bDOF\b", p.texto) is not None)
 
 
 def _publicaciones(p: _Parrafo, base: str) -> tuple[list[dict], str | None]:
@@ -189,14 +215,17 @@ def _publicaciones(p: _Parrafo, base: str) -> tuple[list[dict], str | None]:
     salida, proceso, etiqueta = [], None, ""
     for texto, enlaces in _segmentos(p):
         f = _fechas(texto)
-        if f:
-            m, fecha, fin = f
+        errata = None if f else _fecha_con_errata(texto, enlaces)
+        if f or errata:
+            m, fecha, fin = f or (*errata, None)
             propia = re.sub(r"\bDOF\b", "", texto[:m.start()]).strip(" :.-–")
             pub = {"fecha": fecha, "archivos": []}
             if fin:
                 pub["fecha_fin"] = fin
             if propia or etiqueta:
                 pub["etiqueta"] = propia or etiqueta
+            if errata:
+                pub["fecha_segun"] = "nombre del archivo"
             salida.append(pub)
             etiqueta = ""
         elif not enlaces and texto:
