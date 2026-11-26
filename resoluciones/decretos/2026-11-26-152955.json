@@ -1,0 +1,30 @@
+{
+  "fecha": "2026-11-26T15:29:55+00:00",
+  "resoluciones": [
+    {
+      "candidatos": [
+        "sil-4937807",
+        "sil-4937808",
+        "sil-4972426",
+        "sil-5017046",
+        "sil-5147520",
+        "sil-5187426",
+        "sil-5210957"
+      ],
+      "decreto": "dof-5776439",
+      "estado": "sin_expediente",
+      "fuente_dof": {
+        "consultado": "2026-11-17T11:25:00Z",
+        "sha256": "b3efb3710417d2b33308ec329b85dda73635a8b11f6a761d88fa84a09ba2a44b",
+        "url": "https://sidof.segob.gob.mx/dof/sidof/notas/nota/5776439"
+      },
+      "huella": "c66cbb20ccecff04",
+      "motivo": "el agente no encontró el expediente entre los candidatos",
+      "propuesta": {
+        "citas": [],
+        "expediente": null,
+        "nota": "Ningún candidato encaja: el decreto reforma los arts. 6o, 47, 161 y 166 de la LGEEPA sobre la Guardia Nacional en inspección y vigilancia; ninguna denominación menciona esa materia ni esos artículos. Los candidatos están pendientes en comisión de la revisora o son posteriores al decreto (2026); sil-4972426 ('adicionan diversas disposiciones') es vago y no está aprobado por ambas cámaras. Los archivos de expediente no estaban disponibles para verificar más. Ante la duda, null."
+      }
+    }
+  ]
+}
