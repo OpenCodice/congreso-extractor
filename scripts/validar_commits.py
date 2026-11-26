@@ -20,6 +20,7 @@ CARPETAS = {
     "votaciones": ("expedientes/", "votaciones/"),
     "asuntos": ("iniciativas/", "proposiciones/", "dictamenes-negativos/"),
     "decretos": ("decretos/",),
+    "cronologia": ("cronologia/",),
     "fuentes": ("fuentes/",),
 }
 

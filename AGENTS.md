@@ -1,8 +1,8 @@
 # congreso-extractor — guía para agentes
 
 Código que genera [`congreso-mexicano`](https://github.com/OpenCodice/congreso-mexicano)
-desde el SIL de Gobernación, el DOF, el sitio de votaciones del Senado y la
-Gaceta Parlamentaria de Diputados. Paquete `congreso/`, sin dependencias
+desde el SIL de Gobernación, el DOF, el sitio de votaciones del Senado, la
+Gaceta Parlamentaria de Diputados y las páginas de reformas de LeyesBiblio. Paquete `congreso/`, sin dependencias
 fuera de la biblioteca estándar de Python 3.12.
 
 ## Mapa
@@ -39,6 +39,19 @@ fuera de la biblioteca estándar de Python 3.12.
   mandato, copiada en `fuentes/` como `.jpg` (o `.png`, si eso es lo que sirve el SIL); la `image` de la persona es la
   de su mandato más reciente con foto. Mientras una foto no se descarga, sigue
   la copia anterior.
+- `cronologia.py` — los decretos de reforma de cada ley desde su publicación
+  original, de la página que la Cámara lleva por ley (`LeyesBiblio/ref/{ley}.htm`,
+  ligada a la clave del documento por la fila del índice que enlaza su PDF;
+  la de la CPEUM, `ref/cpeum_crono.htm`): un registro por documento,
+  `cronologia/{documento}.json`, con el original, los decretos numerados y lo
+  demás que la página lista (`otras`: sentencias de la SCJN, acuerdos que
+  actualizan cantidades, declaratorias), cada uno con sus publicaciones (fecha,
+  etiqueta si es una fe de erratas o una aclaración, y los archivos: `pdf`,
+  `word` o `imagen`, la copia escaneada del Diario, que solo se enlaza). Se
+  liga con los repos de leyes por (Documento, Publicacion). Una página cuya
+  numeración no es corrida o con una fecha ilegible no se lee: su registro se
+  queda como estaba y se avisa en el PR. `notas_sin_decreto` son las fechas
+  que anota el texto vigente y la lista no trae.
 - `lecturas.py` — páginas que el parser no leyó: el fallo, la lectura del
   agente y su verificación determinista; `scripts/regresion.py` compara dos
   versiones de los parsers sobre las páginas en caché.
@@ -64,6 +77,7 @@ EGRESS_MX_TOKEN=… python3 -m congreso senado --out ../congreso-mexicano --legi
 EGRESS_MX_TOKEN=… python3 -m congreso gaceta --out ../congreso-mexicano --legislatura 66
 python3 -m congreso asuntos    --out ../congreso-mexicano --legislatura 66 [--tipo 11]
 python3 -m congreso decretos   --out ../congreso-mexicano --repos ..
+python3 -m congreso cronologia --out ../congreso-mexicano --repos ..
 python3 -m congreso validar    --out ../congreso-mexicano
 python3 -m congreso residuos pendientes --out ../congreso-mexicano --repos .. --trabajo /tmp/r
 python3 -m pytest -q
@@ -73,14 +87,14 @@ python3 -m pytest -q
 El orden importa: las votaciones necesitan el padrón; las del Senado y la
 Gaceta, las del SIL (para ligarse); los asuntos, el padrón y los expedientes;
 los decretos, los expedientes. `decretos` lee los trailers de los repos de leyes clonados en
-`--repos`.
+`--repos`; `cronologia`, su registro (`fuentes.json`) y las fechas de sus notas.
 
 ## Actualización
 
 `.github/workflows/actualizar-congreso.yml` corre los pasos leyendo del archivo
 (ver «Red»), valida y abre en `congreso-mexicano` un PR `verificado` con un
 commit por tipo de dato
-(`scripts/commits.py`: padrón, votaciones, asuntos, decretos y fuentes;
+(`scripts/commits.py`: padrón, votaciones, asuntos, decretos, cronología y fuentes;
 trailer `Tipo`). El repo de datos no tiene workflows: su PR lo valida y
 fusiona `revisar-pr.yml` de este repo, que llaman `actualizar-congreso.yml` y
 `resolver-residuos.yml` al abrirlo (y se lanza a mano con `gh workflow run

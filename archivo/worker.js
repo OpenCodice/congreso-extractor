@@ -23,6 +23,7 @@ export const SITIOS = {
   "gaceta.diputados.gob.mx": { pausa: 3000, mx: true, cupo: 5 },
   "dof.gob.mx": { pausa: 2000, cupo: 2 },
   "sidof.segob.gob.mx": { pausa: 2000, cupo: 2 },
+  "www.diputados.gob.mx": { pausa: 3000, cupo: 5 },
 };
 // Páginas que los firewalls sirven con estado 200 (iguales a `red.BLOQUEOS`).
 export const BLOQUEOS = ["This page can't be displayed", "_Incapsula_Resource"];

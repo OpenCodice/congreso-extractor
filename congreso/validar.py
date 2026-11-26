@@ -7,17 +7,22 @@
   en `inconsistencias`.
 - Cada dato cita al menos una fuente, y las copias guardadas coinciden con su
   huella. La foto de una persona (`image`) es una de esas copias.
+- La cronología de una ley numera sus decretos de corrido, cada uno con su
+  fecha, y sus archivos son de LeyesBiblio.
 """
 from __future__ import annotations
 
 import gzip
 import hashlib
+import re
 from collections import Counter
 from pathlib import Path
 
 from . import datos
 
 # "not voting": la Gaceta lo registra como quórum (pasó lista y no votó).
+_FECHA_ISO = re.compile(r"^\d{4}-\d\d-\d\d$")
+_LEYESBIBLIO = "https://www.diputados.gob.mx/LeyesBiblio/"
 OPCIONES = {"yes", "no", "abstain", "absent", "not voting"}
 
 
@@ -206,6 +211,21 @@ def validar(raiz: Path) -> list[str]:
         if set(leg.get("aprobaron", [])) & set(leg.get("no_aprobaron", [])):
             errores.append(f"{d}: un congreso aprobó y no aprobó a la vez")
         fuentes(dec, d)
+    for c in datos.todos(raiz, "cronologia"):
+        d = f"cronología {c.get('documento')}"
+        numeros = [x.get("numero") for x in c.get("decretos", [])]
+        if numeros != list(range(1, len(numeros) + 1)):
+            errores.append(f"{d}: la numeración de sus decretos no es corrida")
+        for x in c.get("decretos", []) + ([c["original"]] if c.get("original") else []):
+            fechas = [x.get("fecha")] + [p.get("fecha") for p in x.get("publicaciones", [])]
+            if not x.get("titulo") or not x.get("publicaciones") or not all(
+                    isinstance(f, str) and _FECHA_ISO.match(f) for f in fechas):
+                errores.append(f"{d}: decreto {x.get('numero', 'original')} sin título o sin fecha")
+            for p in x.get("publicaciones", []):
+                for a in p.get("archivos", []):
+                    if not a["url"].startswith(_LEYESBIBLIO) or a["formato"] not in ("pdf", "word", "imagen"):
+                        errores.append(f"{d}: archivo fuera de LeyesBiblio o de formato desconocido ({a['url']})")
+        fuentes(c, d)
     for eid, n in ligados.items():
         if n > 1:
             errores.append(f"expediente {eid}: ligado a {n} decretos")

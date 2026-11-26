@@ -6,6 +6,7 @@
     python -m congreso gaceta     --out ../congreso-mexicano --legislatura 66 [--tabla tabla3or1-3]
     python -m congreso asuntos    --out ../congreso-mexicano --legislatura 66 [--tipo 11]
     python -m congreso decretos   --out ../congreso-mexicano --repos ..
+    python -m congreso cronologia --out ../congreso-mexicano --repos ..
     python -m congreso validar    --out ../congreso-mexicano
     python -m congreso lecturas verificar --fallos /tmp/fallos
     python -m congreso residuos   {pendientes,para-juicio,verificar} --out ../congreso-mexicano --trabajo /tmp/r [--repos ..]
@@ -50,6 +51,10 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--tipo", action="append", help="tipo de asunto del SIL (11, 19, 74639); todos por omisión")
 
     a = sub.add_parser("decretos")
+    a.add_argument("--out", type=Path, required=True)
+    a.add_argument("--repos", type=Path, required=True, help="carpeta con los repos de leyes")
+
+    a = sub.add_parser("cronologia", help="decretos de reforma de cada ley desde su publicación (LeyesBiblio)")
     a.add_argument("--out", type=Path, required=True)
     a.add_argument("--repos", type=Path, required=True, help="carpeta con los repos de leyes")
 
@@ -108,6 +113,9 @@ def ejecutar(args):
     elif args.orden == "decretos":
         from . import decretos
         r = decretos.construir(args.out, args.repos)
+    elif args.orden == "cronologia":
+        from . import cronologia
+        r = cronologia.construir(args.out, args.repos)
     elif args.orden == "residuos":
         from . import residuos
         if args.etapa == "pendientes":

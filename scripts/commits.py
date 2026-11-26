@@ -2,7 +2,7 @@
 
     python scripts/commits.py ../congreso-mexicano
 
-Cada commit lleva el trailer `Tipo` (padron, votaciones, asuntos, decretos, fuentes) para que la
+Cada commit lleva el trailer `Tipo` (padron, votaciones, asuntos, decretos, cronologia, fuentes) para que la
 bitácora lo lea sin interpretar el título.
 """
 from __future__ import annotations
@@ -17,6 +17,7 @@ GRUPOS = (
     ("asuntos", ("iniciativas", "proposiciones", "dictamenes-negativos"),
      "Iniciativas, proposiciones y dictámenes negativos al día"),
     ("decretos", ("decretos",), "Decretos del DOF al día"),
+    ("cronologia", ("cronologia",), "Cronología de reformas de cada ley al día"),
     # Las copias de las páginas oficiales van aparte: las citan todos los anteriores.
     ("fuentes", ("fuentes",), "Copias de las fuentes oficiales"),
 )
