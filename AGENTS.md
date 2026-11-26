@@ -50,8 +50,11 @@ fuera de la biblioteca estándar de Python 3.12.
   `word` o `imagen`, la copia escaneada del Diario, que solo se enlaza). Se
   liga con los repos de leyes por (Documento, Publicacion). Una página cuya
   numeración no es corrida o con una fecha ilegible no se lee: su registro se
-  queda como estaba y se avisa en el PR. `notas_sin_decreto` son las fechas
-  que anota el texto vigente y la lista no trae.
+  queda como estaba y se avisa en el PR. Una fecha con el año mal tecleado
+  («DOF 04-06-214») se completa con el nombre de su archivo (`_04jun14`) solo
+  si día y mes coinciden, y lleva `fecha_segun: "nombre del archivo"`.
+  `notas_sin_decreto` son las fechas que anota el texto vigente y la lista no
+  trae.
 - `lecturas.py` — páginas que el parser no leyó: el fallo, la lectura del
   agente y su verificación determinista; `scripts/regresion.py` compara dos
   versiones de los parsers sobre las páginas en caché.
