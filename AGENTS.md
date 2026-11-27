@@ -135,6 +135,13 @@ El título de cada corrida lleva sus inputs
 la API de GitHub no los devuelve, y de ahí los leen `reparar-parsers.yml`,
 `resolver-residuos.yml` (solo actúan tras una con ` publicar=[si] `) y el
 supervisor. `origen` dice quién la lanzó (`supervisor`; vacío: a mano).
+Una legislatura pasada se carga con el mismo workflow (`legislatura=65`): el
+supervisor lo lanza cada hora, a la media, en modo «solo pedir», y cada
+corrida pide las páginas que la anterior descubrió. Sus pedidas llevan
+`CONGRESO_PRIORIDAD=-2` (se suma a la prioridad de cada una), así que el
+archivo baja primero lo de la legislatura en curso. Los periodos de cada
+legislatura están en `asuntos.LEGISLATURAS`.
+
 `sembrar-archivo.yml` y `sondear-mx.yml` son herramientas que se lanzan a
 mano: llevan el título y `origen`, sin job `estado`; tampoco lo llevan
 `desplegar-workers.yml`, que corre al cambiar `archivo/`, ni `revisar-pr.yml`.
