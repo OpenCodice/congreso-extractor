@@ -205,8 +205,15 @@ def _horas_desde(consultado: str) -> float:
     return (datetime.now(timezone.utc) - t).total_seconds() / 3600
 
 
+# Lo que se suma a la prioridad de cada pedida. La carga de una legislatura
+# pasada corre con un valor negativo: son miles de páginas, y las de la
+# legislatura en curso tienen que seguir bajando primero.
+PRIORIDAD_BASE = int(os.environ.get("CONGRESO_PRIORIDAD", "0"))
+
+
 def pedir(url: str, datos: dict | None = None, prioridad: int = 1) -> None:
     """Anota una página para que el archivo la baje (o la vuelva a bajar)."""
+    prioridad += PRIORIDAD_BASE
     texto = _texto_clave(url, datos)
     clave = hashlib.sha256(texto.encode()).hexdigest()
     cuerpo = _cuerpo(datos)

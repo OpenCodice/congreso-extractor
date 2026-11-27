@@ -51,6 +51,8 @@ jobs:
     env:
       LEG: ${{ inputs.legislatura || '66' }}
       PUBLICAR: ${{ inputs.publicar || 'si' }}
+      # Una legislatura pasada se baja detrás de la que está en curso.
+      CONGRESO_PRIORIDAD: ${{ (inputs.legislatura || '66') == '66' && '0' || '-2' }}
       # Páginas que el parser no pudo leer: las lee el agente y, después,
       # reparar-parsers.yml corrige el parser (ver congreso/lecturas.py).
       CONGRESO_FALLOS: /tmp/fallos
