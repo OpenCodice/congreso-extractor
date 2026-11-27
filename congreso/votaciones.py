@@ -21,10 +21,12 @@ conserva con `retirada_de_la_fuente`.
 """
 from __future__ import annotations
 
+import datetime
 from collections import Counter
 from pathlib import Path
 
 from . import catalogos, cotejo, datos, red, sil, validar
+from .asuntos import LEGISLATURAS
 from .texto import clave_nombre, romano
 
 _CAMARA = {"Cámara de Diputados": "diputados", "Cámara de Senadores": "senado",
@@ -248,21 +250,53 @@ def expediente(seguimiento: str, fila: dict) -> tuple[dict, list[tuple[str, byte
     }, [cs, ch]
 
 
+def _buscar(legislatura: int, desde: str = "", hasta: str = "") -> tuple[list[dict], int | None, dict]:
+    r = red.obtener(sil.URL_BUSQUEDA_VOTACIONES, sil.formulario_votaciones(legislatura, desde, hasta))
+    documento = sil.decodificar(r.contenido)
+    return sil.resultados_votacion(documento), sil.encontrados(documento), r.procedencia()
+
+
+def _anios_legislativos(legislatura: int) -> list[tuple[str, str]]:
+    """Los tramos (dd/mm/aaaa) de la legislatura: hasta el 31 de agosto de cada año."""
+    inicio, fin = (datetime.date.fromisoformat(d) for d in LEGISLATURAS[legislatura])
+    tramos, desde = [], inicio
+    while desde <= fin:
+        corte = datetime.date(desde.year, 8, 31)
+        hasta = min(corte if desde <= corte else corte.replace(year=desde.year + 1), fin)
+        tramos.append((desde.strftime("%d/%m/%Y"), hasta.strftime("%d/%m/%Y")))
+        desde = hasta + datetime.timedelta(days=1)
+    return tramos
+
+
+def dictamenes_votados(legislatura: int) -> tuple[list[dict], dict]:
+    """Las filas del buscador de votaciones de toda la legislatura y la
+    procedencia de la búsqueda. De la
+    búsqueda dependen los retiros: tiene que estar completa. El buscador no
+    entrega más de 999 filas en una página; cuando la legislatura las pasa,
+    se pide por año legislativo."""
+    filas, total, procedencia = _buscar(legislatura)
+    if not filas:
+        raise RuntimeError("el buscador de votaciones no devolvió filas")
+    if total is None or total == len(filas):
+        return filas, procedencia
+    juntas: dict[str, dict] = {}
+    for desde, hasta in _anios_legislativos(legislatura):
+        del_tramo, dice, _ = _buscar(legislatura, desde, hasta)
+        if dice is not None and dice != len(del_tramo):
+            raise RuntimeError(f"el buscador de votaciones dice {dice} y da {len(del_tramo)} filas ({desde} a {hasta})")
+        juntas.update((f["clave"], f) for f in del_tramo)
+    if len(juntas) != total:
+        raise RuntimeError(f"el buscador de votaciones dice {total} y sus años suman {len(juntas)}")
+    return list(juntas.values()), procedencia
+
+
 def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dict:
     """Todas las votaciones de la legislatura (o solo los asuntos de `solo`)."""
     leg = romano(legislatura).lower()
     datos.escribir(raiz, "organizaciones/comision-permanente.json", {
         "id": "comision-permanente", "name": "Comisión Permanente", "classification": "committee",
         "parent_id": "congreso-de-la-union"})
-    r = red.obtener(sil.URL_BUSQUEDA_VOTACIONES, sil.formulario_votaciones(legislatura))
-    documento = sil.decodificar(r.contenido)
-    filas = sil.resultados_votacion(documento)
-    if not filas:
-        raise RuntimeError("el buscador de votaciones no devolvió filas")
-    total = sil.encontrados(documento)
-    # De la búsqueda dependen los retiros: tiene que estar completa.
-    if total is not None and total != len(filas):
-        raise RuntimeError(f"el buscador de votaciones dice {total} y da {len(filas)} filas")
+    filas, busqueda = dictamenes_votados(legislatura)
     if solo:
         # Un expediente se escribe completo: se toman todos sus dictámenes.
         seguimientos = {f["seguimiento"] for f in filas if f["clave"] in solo}
@@ -334,4 +368,4 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
                     datos.marcar_retirada(raiz, ruta.relative_to(raiz).as_posix())
     return {"retirados_de_la_fuente": retiradas, "expedientes": len(por_seguimiento) - len(errores) - pendientes,
             "pendientes_de_descarga": pendientes, "votaciones": escritos,
-            "omitidos": len(errores), "errores": errores, "busqueda": r.procedencia()}
+            "omitidos": len(errores), "errores": errores, "busqueda": busqueda}

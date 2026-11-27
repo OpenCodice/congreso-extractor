@@ -1,3 +1,5 @@
+import pytest
+
 from congreso import datos, votaciones
 from congreso.votaciones_senado import escribir
 
@@ -103,3 +105,27 @@ def test_grupo_desconocido_no_impide_publicar_el_voto():
     indice = {("diputados", "ana"): [{"id": "m1", "person_id": "p1"}]}
     salida, _, inconsistencias = votaciones.atribuir(votos, indice, {"diputados"})
     assert salida[0]["group_id"] is None and "XYZ" in inconsistencias[0]
+
+
+def test_busqueda_que_no_cabe_en_una_pagina_se_pide_por_anio_legislativo(monkeypatch):
+    """El buscador da a lo más 999 filas: una legislatura con más se arma de
+    sus años, y tiene que sumar lo que dice la búsqueda completa."""
+    por_tramo = {"": ([{"clave": "1"}], 5), "29/08/2021": ([], None), "01/09/2021": ([{"clave": "1"}, {"clave": "2"}], 2),
+                 "01/09/2022": ([{"clave": "3"}], 1), "01/09/2023": ([{"clave": "4"}, {"clave": "5"}], 2)}
+    pedidos = []
+
+    def buscar(legislatura, desde="", hasta=""):
+        pedidos.append((desde, hasta))
+        filas, dice = por_tramo[desde]
+        return filas, dice, {"url": desde}
+
+    monkeypatch.setattr(votaciones, "_buscar", buscar)
+    filas, procedencia = votaciones.dictamenes_votados(65)
+    assert sorted(f["clave"] for f in filas) == ["1", "2", "3", "4", "5"]
+    assert pedidos[1:] == [("29/08/2021", "31/08/2021"), ("01/09/2021", "31/08/2022"),
+                           ("01/09/2022", "31/08/2023"), ("01/09/2023", "31/08/2024")]
+    assert procedencia == {"url": ""}
+
+    por_tramo["01/09/2023"] = ([{"clave": "4"}], 1)
+    with pytest.raises(RuntimeError, match="sus años suman 4"):
+        votaciones.dictamenes_votados(65)

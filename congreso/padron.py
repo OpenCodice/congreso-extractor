@@ -94,6 +94,10 @@ def construir(raiz: Path, legislatura: int, camara: str, perfiles: bool = True) 
     filas = sil.padron(sil.decodificar(r.contenido))
     if not filas:
         raise RuntimeError(f"padrón vacío: {r.url}")
+    # El SIL deja en legislaturas pasadas renglones de un lugar sin persona
+    # (nombre «- -»): no son un mandato de nadie.
+    sin_nombre = [f for f in filas if not clave_nombre(f["nombre"])]
+    filas = [f for f in filas if clave_nombre(f["nombre"])]
 
     repetidos = [n for n, c in Counter(clave_nombre(f["nombre"]) for f in filas).items() if c > 1]
     if repetidos:
@@ -203,5 +207,6 @@ def construir(raiz: Path, legislatura: int, camara: str, perfiles: bool = True) 
                 pendientes += 1
         escritos += datos.escribir(raiz, ruta, mandato)
     escritos += imagenes(raiz, personas)
-    return {"mandatos": len(filas), "archivos_cambiados": escritos, "perfiles_pendientes": pendientes,
+    return {"mandatos": len(filas), "sin_persona": len(sin_nombre), "archivos_cambiados": escritos,
+            "perfiles_pendientes": pendientes,
             "errores": [f"{pendientes} perfiles sin descargar (firewall del SIL)"] if pendientes else []}

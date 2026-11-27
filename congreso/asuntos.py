@@ -26,7 +26,7 @@ TIPOS = {
     sil.TIPO_PROPOSICION: "proposiciones",
     sil.TIPO_DICTAMEN_NEGATIVO: "dictamenes-negativos",
 }
-LEGISLATURAS = {66: ("2024-08-29", "2027-08-31")}
+LEGISLATURAS = {65: ("2021-08-29", "2024-08-31"), 66: ("2024-08-29", "2027-08-31")}
 _CAMARA = {"Cámara de Diputados": "diputados", "Cámara de Senadores": "senado", "Comisión Permanente": "permanente"}
 
 
