@@ -143,3 +143,11 @@ def test_archivo_error_definitivo_de_la_fuente(tmp_path, monkeypatch):
         assert False, "un 404 de la fuente no es pendiente"
     except RuntimeError as e:
         assert "estado 404" in str(e)
+
+
+def test_la_carga_de_una_legislatura_pasada_pide_con_menos_prioridad(monkeypatch):
+    monkeypatch.setattr(red, "PEDIDAS", {})
+    monkeypatch.setattr(red, "PRIORIDAD_BASE", -2)
+    red.pedir("http://sil.gobernacion.gob.mx/a")
+    red.pedir("http://sil.gobernacion.gob.mx/b", prioridad=0)
+    assert sorted(p["prioridad"] for p in red.PEDIDAS.values()) == [-2, -1]
