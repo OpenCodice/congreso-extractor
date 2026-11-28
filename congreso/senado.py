@@ -18,6 +18,9 @@ import re
 from .texto import sin_acentos
 
 BASE = "https://www.senado.gob.mx"
+# El sitio vive bajo el número de la legislatura en curso, también para las
+# votaciones de las anteriores: /65/... solo redirige a /66/.
+SITIO = 66
 
 _MESES = {m: i for i, m in enumerate(
     ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
@@ -27,16 +30,16 @@ _FECHA = re.compile(r"(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|do
 OPCIONES = {"PRO": "yes", "CONTRA": "no", "ABSTENCION": "abstain", "ABSTENCIÓN": "abstain"}
 
 
-def url_listado(legislatura: int = 66, romano: str = "LXVI") -> str:
-    return f"{BASE}/{legislatura}/votaciones/por_legislatura/{romano}/"
+def url_listado(romano: str = "LXVI") -> str:
+    return f"{BASE}/{SITIO}/votaciones/por_legislatura/{romano}/"
 
 
-def url_votacion(clave: str, legislatura: int = 66) -> str:
-    return f"{BASE}/{legislatura}/votacion/{clave}"
+def url_votacion(clave: str) -> str:
+    return f"{BASE}/{SITIO}/votacion/{clave}"
 
 
-def url_tabla(clave: str, legislatura: int = 66) -> str:
-    return (f"{BASE}/{legislatura}/app/votaciones/functions/viewTableVot.php"
+def url_tabla(clave: str) -> str:
+    return (f"{BASE}/{SITIO}/app/votaciones/functions/viewTableVot.php"
             f"?action=ajax&cell=1&order=DESC&votacion={clave}&q=")
 
 

@@ -112,7 +112,7 @@ def test_presupuesto_agotado_deja_el_resto_sin_retirar(tmp_path, monkeypatch):
 
 def test_votaciones_pendientes_de_descarga_no_se_retiran(tmp_path, monkeypatch):
     from congreso import datos, red, senado, votaciones_senado
-    listado = senado.url_listado(66, "LXVI")
+    listado = senado.url_listado("LXVI")
 
     def obtener(url, *a, **k):
         if url == listado:
@@ -131,3 +131,8 @@ def test_votacion_periodo_extraordinario_en_minusculas():
     assert g["fecha"] == "2026-05-28"
     assert g["conteos"] == {"yes": 85, "no": 42, "abstain": 0}
     assert g["motion"] == "VOTACIÓN EN LO GENERAL Y EN LO PARTICULAR"
+
+
+def test_las_legislaturas_anteriores_se_piden_al_sitio_vigente():
+    assert senado.url_listado("LXV") == "https://www.senado.gob.mx/66/votaciones/por_legislatura/LXV/"
+    assert senado.url_votacion("4690") == "https://www.senado.gob.mx/66/votacion/4690"

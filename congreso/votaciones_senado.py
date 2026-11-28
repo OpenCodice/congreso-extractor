@@ -87,7 +87,7 @@ def leer_votacion(clave: str, rv: red.Respuesta, rt: red.Respuesta) -> tuple[dic
 
 def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dict:
     leg = romano(legislatura).lower()
-    rl = red.obtener(senado.url_listado(legislatura, romano(legislatura)))
+    rl = red.obtener(senado.url_listado(romano(legislatura)))
     listado = senado.listado(senado.decodificar(rl.contenido))
     if not listado:
         raise RuntimeError("el listado de votaciones del Senado está vacío")
@@ -104,10 +104,10 @@ def construir(raiz: Path, legislatura: int, solo: set[str] | None = None) -> dic
             errores.append(f"se agotaron los {PRESUPUESTO:g} min de descarga del Senado; quedan "
                            f"{len(listado) - i} votaciones para la siguiente corrida")
             break
-        red.anticipar(senado.url_tabla(x["clave"], legislatura))
+        red.anticipar(senado.url_tabla(x["clave"]))
         try:
-            rv = red.obtener(senado.url_votacion(x["clave"], legislatura), vigencia_horas=VIGENCIA, bloqueos=ESPERAS)
-            rt = red.obtener(senado.url_tabla(x["clave"], legislatura), vigencia_horas=VIGENCIA, bloqueos=ESPERAS)
+            rv = red.obtener(senado.url_votacion(x["clave"]), vigencia_horas=VIGENCIA, bloqueos=ESPERAS)
+            rt = red.obtener(senado.url_tabla(x["clave"]), vigencia_horas=VIGENCIA, bloqueos=ESPERAS)
             v, filas = leer_votacion(x["clave"], rv, rt)
             leidas.append((dict(v, clave=x["clave"], orden=int(x["clave"])), filas, [rv, rt]))
         except red.Bloqueado:
